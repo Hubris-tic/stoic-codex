@@ -1,0 +1,71 @@
+# Drop into .github/workflows/upstream-sync.yml in the fork.
+# Purpose: make upstream drift visible weekly instead of at release time.
+name: upstream-sync
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"      # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream
+        run: |
+          git remote add upstream https://github.com/openai/codex.git || true
+          git fetch upstream --tags
+
+      - name: How far behind are we?
+        id: drift
+        run: |
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
+          AHEAD=$(git rev-list --count upstream/main..HEAD)
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "ahead=$AHEAD"   >> "$GITHUB_OUTPUT"
+          echo "Behind upstream by $BEHIND commits; ahead by $AHEAD."
+
+      - name: Dry-run rebase (does not push)
+        id: rebase
+        continue-on-error: true
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name  "upstream-sync bot"
+          git rebase upstream/main
+          echo "status=clean" >> "$GITHUB_OUTPUT"
+
+      - name: Which of OUR patched files conflicted?
+        if: steps.rebase.outcome == 'failure'
+        run: |
+          echo "### Conflicting files (compare against PATCHES.md)" >> "$GITHUB_STEP_SUMMARY"
+          git diff --name-only --diff-filter=U | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Any file here that is NOT a row in PATCHES.md means an unrecorded patch exists." >> "$GITHUB_STEP_SUMMARY"
+          git rebase --abort || true
+          exit 1
+
+      - name: Build (only if the rebase was clean)
+        if: steps.rebase.outputs.status == 'clean'
+        uses: dtolnay/rust-toolchain@stable
+      - if: steps.rebase.outputs.status == 'clean'
+        run: cargo build --workspace --locked
+
+      - name: Report drift as an issue
+        if: steps.drift.outputs.behind != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const behind = "${{ steps.drift.outputs.behind }}";
+            const clean  = "${{ steps.rebase.outputs.status }}" === "clean";
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `upstream drift: ${behind} commits behind`,
+              body: `Rebase dry-run: **${clean ? "clean" : "conflicted"}**.\n\nBehind by ${behind} commits as of ${new Date().toISOString()}.`,
+              labels: ["upstream-sync"]
+            });

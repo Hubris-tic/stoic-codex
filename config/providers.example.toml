@@ -1,0 +1,44 @@
+# Example BYOK configuration for Zenithal.
+# Lives at ~/.zenithal/config.toml (upstream used ~/.codex/config.toml; see NAMING.md).
+# Adapter ids come from `zenithal_providers::adapters::provider_ids()`.
+
+[model_providers.anthropic]
+wire     = "anthropic"
+base_url = "https://api.anthropic.com"
+env_key  = "ANTHROPIC_API_KEY"
+
+[model_providers.openai]
+wire     = "openai"                 # Responses API
+base_url = "https://api.openai.com/v1"
+env_key  = "OPENAI_API_KEY"
+
+[model_providers.gemini]
+wire     = "gemini"
+base_url = "https://generativelanguage.googleapis.com"
+env_key  = "GEMINI_API_KEY"
+
+[model_providers.groq]
+wire     = "groq"
+base_url = "https://api.groq.com/openai/v1"
+env_key  = "GROQ_API_KEY"
+
+# Local models: no key, no network, no cost. The reason people choose BYOK.
+[model_providers.local-ollama]
+wire     = "ollama"
+base_url = "http://localhost:11434/v1"
+env_key  = ""
+
+# Per-task routing. Cheapest thing that is good enough, strongest for hard work.
+[routing]
+plan     = "anthropic:claude-sonnet"
+patch    = "openai:gpt-5-codex"
+review   = "anthropic:claude-sonnet"
+classify = "gemini:flash"
+memory   = "gemini:flash"
+
+# Privacy: force local models for anything matching these globs.
+prefer_local_for = ["**/secrets/**", "**/.env*", "**/*.pem"]
+
+[routing.budget]
+max_cost_micros_per_call = 50000    # 5 cents
+max_cost_micros_per_session = 5000000

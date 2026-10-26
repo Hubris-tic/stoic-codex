@@ -1,0 +1,92 @@
+# Zenithal — memory schema for TypeDB 3.x
+#
+# Load with:
+#   typedb server                    # separate process, gRPC on :1729
+#   console --command="database create zenithal_memory"
+#   console --database=zenithal_memory --command="source schema/memory.tql"
+#
+# STATUS: written against the TypeDB 3.x TypeQL schema reference, but NOT yet loaded
+# against a live server (none available in the build sandbox). See TYPEDB.md for the
+# one construct — `fun` recursion over an undirected edge set — most likely to need
+# adjustment on first contact with a real server.
+
+define
+
+# ─── attributes ────────────────────────────────────────────────────────────────
+attribute uid value string;            # stable external id, e.g. "file:src/auth.rs"
+attribute label value string;
+attribute body value string;           # the text that was embedded
+attribute provenance value string;     # file:line, commit sha, thread id
+attribute created-at value integer;   # unix seconds
+attribute importance value double;     # 0..1
+attribute confidence value double;     # 0..1, for inferred edges
+attribute note value string;
+
+# Embeddings, portable form: comma-separated f32, scored in-process by
+# `zenithal-memory::scoring`. Works on every TypeDB 3.x.
+attribute embedding-text value string;
+
+# Native vector form. Alpha upstream (3.7+); uncomment only when it is stable —
+# the query layer already knows how to use `cosine_similarity_search`.
+# attribute embedding value vector(1536, "float32");
+
+# ─── shared supertypes ─────────────────────────────────────────────────────────
+# One `memory-node` root keeps traversal functions generic: reachability does not
+# need to know whether it walked into a file or a decision.
+entity memory-node,
+  owns uid @key,
+  owns label,
+  # Ownership is optional by default in TypeDB 3.x; `?` is not valid syntax here.
+  owns body,
+  owns provenance,
+  owns created-at,
+  owns importance,
+  owns embedding-text,
+  # Both ends of every edge, so one traversal function covers the whole graph.
+  plays memory-edge:source,
+  plays memory-edge:target;
+
+entity source-file,     sub memory-node, owns path;
+entity code-symbol,     sub memory-node, owns path, owns symbol-kind;
+entity commit,          sub memory-node, owns sha;
+entity task,            sub memory-node, owns status;
+entity decision,        sub memory-node, owns rationale;
+entity failure,         sub memory-node, owns signature;
+entity agent,           sub memory-node, owns agent-role;
+entity document,        sub memory-node, owns path;
+
+attribute path value string;
+attribute symbol-kind value string;
+attribute sha value string;
+attribute status value string;
+attribute rationale value string;
+attribute signature value string;
+attribute agent-role value string;   # `role` is a reserved keyword in TypeQL
+
+# ─── relations ─────────────────────────────────────────────────────────────────
+# Every edge is `memory-edge` with a typed role pair, so a single `fun` can traverse
+# the whole graph while individual relations keep their own meaning and cardinality.
+relation memory-edge,
+  relates source,
+  relates target,
+  owns confidence,
+  owns note;
+
+relation calls,      sub memory-edge;   # code-symbol -> code-symbol
+relation imports,    sub memory-edge;   # source-file -> source-file
+relation fixes,      sub memory-edge;   # commit -> (failure | source-file)
+relation regresses,  sub memory-edge;   # commit -> failure
+relation blocks,     sub memory-edge;   # task -> task
+relation supersedes, sub memory-edge;   # decision -> decision
+relation derived-from, sub memory-edge; # document -> (any)
+relation authored-by, sub memory-edge;  # (any) -> agent
+
+# ─── inference ─────────────────────────────────────────────────────────────────
+# Transitive reachability. TypeDB 3.0 removed `rule` in favour of `fun`; a recursive
+# function with tabling answers "what does this file transitively affect" without
+# materialising a closure table.
+fun reachable($start: memory-node) -> { memory-node }:
+  match
+    { $x is $start; } or
+    { (source: $start, target: $mid) isa memory-edge; let $x in reachable($mid); };
+  return { $x };

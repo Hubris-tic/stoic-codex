@@ -1,0 +1,82 @@
+{
+  "_comment": "Model catalogue consumed by Registry::from_json. THESE NUMBERS ARE PLACEHOLDERS - verify names and prices against each vendor before shipping.",
+  "models": [
+    {
+      "id": "anthropic:claude-sonnet",
+      "provider": "anthropic",
+      "wire_name": "claude-sonnet-4-5",
+      "tier": "strong",
+      "local": false,
+      "pricing": {
+        "input_per_mtok": 3.0,
+        "output_per_mtok": 15.0,
+        "cache_read_multiplier": 0.1,
+        "cache_write_multiplier": 1.25
+      },
+      "capabilities": {
+        "tools": true,
+        "parallel_tools": true,
+        "streaming": true,
+        "stream_usage": true,
+        "vision": true,
+        "implicit_cache": false,
+        "explicit_cache": true,
+        "reasoning": true,
+        "json_mode": false,
+        "tool_choice": "full",
+        "stop_sequences": true,
+        "max_context": 200000,
+        "max_output": 32000
+      },
+      "tags": ["coding", "long-context"]
+    },
+    {
+      "id": "gemini:flash",
+      "provider": "gemini",
+      "wire_name": "gemini-2.5-flash",
+      "tier": "small",
+      "local": false,
+      "pricing": { "input_per_mtok": 0.15, "output_per_mtok": 0.6 },
+      "capabilities": {
+        "tools": true,
+        "parallel_tools": true,
+        "streaming": true,
+        "stream_usage": true,
+        "vision": true,
+        "implicit_cache": true,
+        "explicit_cache": false,
+        "reasoning": true,
+        "json_mode": true,
+        "tool_choice": "auto_only",
+        "stop_sequences": true,
+        "max_context": 1000000,
+        "max_output": 16000
+      },
+      "tags": ["cheap", "huge-context"]
+    },
+    {
+      "id": "ollama:qwen-coder",
+      "provider": "ollama",
+      "wire_name": "qwen2.5-coder",
+      "tier": "mid",
+      "local": true,
+      "pricing": { "input_per_mtok": 0.0, "output_per_mtok": 0.0 },
+      "capabilities": {
+        "tools": true,
+        "parallel_tools": false,
+        "streaming": true,
+        "stream_usage": false,
+        "vision": false,
+        "implicit_cache": false,
+        "explicit_cache": false,
+        "reasoning": false,
+        "json_mode": true,
+        "tool_choice": "none",
+        "stop_sequences": true,
+        "max_context": 32000,
+        "max_output": 8000
+      },
+      "tags": ["offline", "private", "free"]
+    }
+  ]
+}

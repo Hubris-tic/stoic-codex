@@ -1,0 +1,8 @@
+[package]
+name = "zenithal-brand"
+version = "0.1.0"
+edition = "2021"
+description = "Zenithal: single source of truth for product identity. Rename the product by editing one file."
+license = "Apache-2.0"
+
+[dependencies]

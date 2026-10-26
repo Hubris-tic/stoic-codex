@@ -1,0 +1,19 @@
+[package]
+name = "zenithal-memory"
+version = "0.1.0"
+edition = "2021"
+description = "Zenithal: hybrid memory layer. Typed graph + vector retrieval behind one trait; TypeDB and SQLite are interchangeable backends."
+license = "Apache-2.0"
+
+[dependencies]
+# Small and dependency-light: only used by the single-file local backend.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Only pulled in with `--features typedb`: gRPC client (tonic/prost/tokio).
+# Kept optional so the default build stays instant and tiny.
+typedb-driver = { version = "3.14", features = ["sync"], optional = true }
+
+[features]
+# The TypeDB driver is gRPC (tonic) and pulls a protobuf toolchain; keep it out of the
+# default build so `cargo test` stays fast and hermetic. Enable for integration work.
+typedb = ["dep:typedb-driver"]

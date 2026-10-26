@@ -1,0 +1,644 @@
+diff --git a/announcement_tip.toml b/announcement_tip.toml
+index 79c0dae..355cf39 100644
+--- a/announcement_tip.toml
++++ b/announcement_tip.toml
+@@ -1,17 +1,11 @@
+-# Example announcement tips for Codex TUI.
+-# Each [[announcements]] entry is evaluated in order; the last matching one is shown.
+-# Dates are UTC, formatted as YYYY-MM-DD. The from_date is inclusive and the to_date is exclusive.
+-# version_regex matches against the CLI version (env!("CARGO_PKG_VERSION")); omit to apply to all versions.
+-# target_app specify which app should display the announcement (cli, vsce, ...).
++# Announcement tips served to Zenithal clients.
++#
++# The TUI fetches this file from our repository (see codex-rs/tui/src/tooltips.rs).
++# Schema matches upstream: entries are evaluated in order, the last match wins.
++# Dates are UTC, YYYY-MM-DD; from_date inclusive, to_date exclusive.
++# version_regex is matched against the CLI version; omit it to apply to all versions.
+ 
+-# Test announcement only for local build version until 2027-05-10 excluded
+ [[announcements]]
+-content = "This is a test announcement"
+-version_regex = "^0\\.0\\.0$"
+-to_date = "2027-05-10"
+-
+-[[announcements]]
+-content = "Update Required - This version will no longer be supported starting May 8th. Please upgrade to the latest version (https://github.com/openai/codex/releases/latest) using your preferred package manager."
+-# Matches 0.x.y versions from 0.0.y through 0.119.y; excludes 0.120.0 and newer.
+-version_regex = "^0\\.(?:[0-9]|[1-9][0-9]|1[01][0-9])\\."
+-to_date = "2026-05-08"
++content = "Zenithal is a fork of openai/codex. Your data, models and keys stay yours: run `/model` to switch provider."
++from_date = "2026-01-01"
++to_date = "2027-01-01"
+diff --git a/codex-rs/cli/src/app_cmd.rs b/codex-rs/cli/src/app_cmd.rs
+index 44c22b6..d49d7a3 100644
+--- a/codex-rs/cli/src/app_cmd.rs
++++ b/codex-rs/cli/src/app_cmd.rs
+@@ -13,13 +13,14 @@ pub struct AppCommand {
+ }
+ 
+ pub async fn run_app(cmd: AppCommand) -> anyhow::Result<()> {
+-    let workspace = std::fs::canonicalize(&cmd.path).unwrap_or(cmd.path);
+-    #[cfg(target_os = "macos")]
+-    {
+-        crate::desktop_app::run_app_open_or_install(workspace, cmd.download_url_override).await
+-    }
+-    #[cfg(target_os = "windows")]
+-    {
+-        crate::desktop_app::run_app_open_or_install(workspace, cmd.download_url_override).await
+-    }
++    // NIZARI: disabled. Upstream `app` downloads and installs OpenAI's signed desktop
++    // application (Codex.dmg on macOS, OpenAI.Codex MSIX on Windows). That binary is not
++    // part of Zenithal, and installing it silently would be both misleading and
++    // unverifiable for us. Re-enable only when we ship our own desktop client.
++    let _ = (cmd.path, cmd.download_url_override);
++    anyhow::bail!(
++        "`app` is disabled in Zenithal: it would install OpenAI's desktop application, \
++         which is not part of this project. Track progress at {}",
++        "https://github.com/Hubris-tic/zenithal/issues"
++    )
+ }
+diff --git a/codex-rs/cli/src/desktop_app/mac.rs b/codex-rs/cli/src/desktop_app/mac.rs
+index fb5a442..43929e5 100644
+--- a/codex-rs/cli/src/desktop_app/mac.rs
++++ b/codex-rs/cli/src/desktop_app/mac.rs
+@@ -7,8 +7,11 @@ use tokio::process::Command;
+ 
+ const CODEX_BUNDLE_IDENTIFIER: &str = "com.openai.codex";
+ const OPENAI_APPLE_TEAM_IDENTIFIER: &str = "2DC432GLL2";
++// INERT: `app` subcommand bails before reaching this module (see cli/src/app_cmd.rs).
++// zenithal:allow-upstream-url -- kept only so the module compiles; never fetched.
+ const CODEX_DMG_URL_ARM64: &str = "https://persistent.oaistatic.com/codex-app-prod/Codex.dmg";
+ const CODEX_DMG_URL_X64: &str =
++    // zenithal:allow-upstream-url -- INERT, see note above.
+     "https://persistent.oaistatic.com/codex-app-prod/Codex-latest-x64.dmg";
+ 
+ pub async fn run_mac_app_open_or_install(
+diff --git a/codex-rs/cli/src/doctor/updates.rs b/codex-rs/cli/src/doctor/updates.rs
+index fbad7d9..726c0f2 100644
+--- a/codex-rs/cli/src/doctor/updates.rs
++++ b/codex-rs/cli/src/doctor/updates.rs
+@@ -33,16 +33,21 @@ use super::network;
+ const MAX_VERSION_RESPONSE_BYTES: usize = 1024 * 1024;
+ 
+ const VERSION_FILE_NAME: &str = "version.json";
+-const GITHUB_LATEST_RELEASE_URL: &str = "https://api.github.com/repos/openai/codex/releases/latest";
++const GITHUB_LATEST_RELEASE_URL: &str = "https://api.github.com/repos/Hubris-tic/zenithal/releases/latest";
++// zenithal:allow-upstream-url -- INERT: no Homebrew cask exists for this fork; the check
++// will simply report the cask as unavailable.
+ const HOMEBREW_CASK_API_URL: &str = "https://formulae.brew.sh/api/cask/codex.json";
+ #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
++// zenithal:allow-upstream-url -- INERT: desktop app is not installable in Zenithal.
+ const DESKTOP_UPDATE_URL: &str = "https://persistent.oaistatic.com/codex-app-prod/appcast-x64.xml";
+ #[cfg(all(target_os = "macos", not(target_arch = "x86_64")))]
++// zenithal:allow-upstream-url -- INERT, see above.
+ const DESKTOP_UPDATE_URL: &str = "https://persistent.oaistatic.com/codex-app-prod/appcast.xml";
+ #[cfg(target_os = "macos")]
+ const BACKEND_DESKTOP_UPDATE_URL: &str = "https://chatgpt.com/backend-api/wham/app/appcast";
+ #[cfg(target_os = "windows")]
+ const DESKTOP_UPDATE_URL: &str =
++    // zenithal:allow-upstream-url -- INERT, see note above.
+     "https://persistent.oaistatic.com/codex-app-prod/windows-store-update.json";
+ 
+ /// Builds the update-health row for the current installation.
+@@ -389,11 +394,11 @@ fn push_cached_version_details(details: &mut Vec<String>, version_file: &Path) {
+ 
+ fn update_action_label(context: &InstallContext) -> &'static str {
+     match &context.method {
+-        InstallMethod::Npm => "npm install -g @openai/codex",
+-        InstallMethod::Bun => "bun install -g @openai/codex",
+-        InstallMethod::VitePlus => "vp install -g @openai/codex",
+-        InstallMethod::Pnpm => "pnpm add -g @openai/codex",
+-        InstallMethod::Brew => "brew upgrade --cask codex",
++        InstallMethod::Npm => "self-update disabled in Zenithal",
++        InstallMethod::Bun => "self-update disabled in Zenithal",
++        InstallMethod::VitePlus => "self-update disabled in Zenithal",
++        InstallMethod::Pnpm => "self-update disabled in Zenithal",
++        InstallMethod::Brew => "self-update disabled in Zenithal",
+         InstallMethod::Standalone { .. } => "standalone installer",
+         InstallMethod::Other => "manual or unknown",
+     }
+diff --git a/codex-rs/tui/src/app/daemon_menu.rs b/codex-rs/tui/src/app/daemon_menu.rs
+index ada9e88..bc3f1d1 100644
+--- a/codex-rs/tui/src/app/daemon_menu.rs
++++ b/codex-rs/tui/src/app/daemon_menu.rs
+@@ -55,7 +55,7 @@ impl App {
+                 "Manage this server on its host. Local daemon updates are unavailable for remote connections.",
+             )
+         } else if self.daemon_cli_executable.is_none() {
+-            Some("Run the Codex CLI to manage the daemon from this menu.")
++            Some("Run the zenithal CLI to manage the daemon from this menu.")
+         } else {
+             None
+         };
+diff --git a/codex-rs/tui/src/bottom_pane/feedback_view.rs b/codex-rs/tui/src/bottom_pane/feedback_view.rs
+index f576f13..ba93f7a 100644
+--- a/codex-rs/tui/src/bottom_pane/feedback_view.rs
++++ b/codex-rs/tui/src/bottom_pane/feedback_view.rs
+@@ -15,7 +15,8 @@ use crate::history_cell;
+ use super::popup_consts::standard_popup_hint_line;
+ 
+ const BASE_CLI_BUG_ISSUE_URL: &str =
+-    "https://github.com/openai/codex/issues/new?template=3-cli.yml";
++    // NIZARI: was openai/codex's tracker, which we cannot triage.
++    "https://github.com/Hubris-tic/zenithal/issues/new";
+ /// Internal routing link for employee feedback follow-ups. This must not be shown to external users.
+ const CODEX_FEEDBACK_INTERNAL_URL: &str = "http://go/codex-feedback-internal";
+ 
+diff --git a/codex-rs/tui/src/bottom_pane/memories_settings_view.rs b/codex-rs/tui/src/bottom_pane/memories_settings_view.rs
+index 5cc3862..a859edf 100644
+--- a/codex-rs/tui/src/bottom_pane/memories_settings_view.rs
++++ b/codex-rs/tui/src/bottom_pane/memories_settings_view.rs
+@@ -33,7 +33,8 @@ use super::popup_consts::MAX_POPUP_ROWS;
+ use super::scroll_state::ScrollState;
+ use super::selection_popup_common::GenericDisplayRow;
+ 
+-const MEMORIES_DOC_URL: &str = "https://developers.openai.com/codex/memories";
++// NIZARI: upstream pointed at OpenAI's docs; our memory model will differ.
++const MEMORIES_DOC_URL: &str = "https://github.com/Hubris-tic/zenithal/tree/main/docs";
+ 
+ #[derive(Clone, Copy, PartialEq, Eq)]
+ enum MemoriesSetting {
+diff --git a/codex-rs/tui/src/bottom_pane/status_line_setup.rs b/codex-rs/tui/src/bottom_pane/status_line_setup.rs
+index 9567424..f405f1c 100644
+--- a/codex-rs/tui/src/bottom_pane/status_line_setup.rs
++++ b/codex-rs/tui/src/bottom_pane/status_line_setup.rs
+@@ -192,7 +192,7 @@ impl StatusLineItem {
+             StatusLineItem::WeeklyLimit => {
+                 "Remaining usage on the secondary usage limit (omitted when unavailable)"
+             }
+-            StatusLineItem::CodexVersion => "Codex application version",
++            StatusLineItem::CodexVersion => "Zenithal application version",
+             StatusLineItem::ContextWindowSize => {
+                 "Total context window size in tokens (omitted when unknown)"
+             }
+diff --git a/codex-rs/tui/src/bottom_pane/title_setup.rs b/codex-rs/tui/src/bottom_pane/title_setup.rs
+index 145938b..5c31db0 100644
+--- a/codex-rs/tui/src/bottom_pane/title_setup.rs
++++ b/codex-rs/tui/src/bottom_pane/title_setup.rs
+@@ -99,7 +99,7 @@ pub(crate) enum TerminalTitleItem {
+ impl TerminalTitleItem {
+     pub(crate) fn description(self) -> &'static str {
+         match self {
+-            TerminalTitleItem::AppName => "Codex app name",
++            TerminalTitleItem::AppName => "Zenithal app name",
+             TerminalTitleItem::Project => "Project name (falls back to current directory name)",
+             TerminalTitleItem::CurrentDir => "Current working directory",
+             TerminalTitleItem::Spinner => {
+@@ -123,7 +123,7 @@ impl TerminalTitleItem {
+             TerminalTitleItem::WeeklyLimit => {
+                 "Remaining usage on the secondary usage limit (omitted when unavailable)"
+             }
+-            TerminalTitleItem::CodexVersion => "Codex application version",
++            TerminalTitleItem::CodexVersion => "Zenithal application version",
+             TerminalTitleItem::UsedTokens => "Total tokens used in session (omitted when zero)",
+             TerminalTitleItem::TotalInputTokens => "Total input tokens used in session",
+             TerminalTitleItem::TotalOutputTokens => "Total output tokens used in session",
+diff --git a/codex-rs/tui/src/custom_terminal.rs b/codex-rs/tui/src/custom_terminal.rs
+index 0607a8c..25fee3f 100644
+--- a/codex-rs/tui/src/custom_terminal.rs
++++ b/codex-rs/tui/src/custom_terminal.rs
+@@ -1126,7 +1126,7 @@ mod tests {
+                         Line::from(vec![
+                             "›".bold(),
+                             " ".into(),
+-                            "Ask Codex to do anything".dim(),
++                            "Ask Zenithal to do anything".dim(),
+                         ]),
+                     ])
+                     .render(frame.area(), frame.buffer_mut());
+diff --git a/codex-rs/tui/src/history_cell/notices.rs b/codex-rs/tui/src/history_cell/notices.rs
+index 06d7b2f..850291c 100644
+--- a/codex-rs/tui/src/history_cell/notices.rs
++++ b/codex-rs/tui/src/history_cell/notices.rs
+@@ -39,7 +39,8 @@ impl HistoryCell for UpdateAvailableHistoryCell {
+         } else {
+             line![
+                 "See ",
+-                "https://github.com/openai/codex"
++                // NIZARI: was openai/codex.
++                "https://github.com/Hubris-tic/zenithal"
+                     .fg(accent_color())
+                     .underlined(),
+                 " for installation options."
+@@ -56,7 +57,8 @@ impl HistoryCell for UpdateAvailableHistoryCell {
+             update_instruction,
+             "",
+             "See full release notes:",
+-            "https://github.com/openai/codex/releases/latest"
++            // NIZARI: our releases, not upstream's.
++            "https://github.com/Hubris-tic/zenithal/releases/latest"
+                 .fg(accent_color())
+                 .underlined(),
+         ];
+@@ -73,7 +75,7 @@ impl HistoryCell for UpdateAvailableHistoryCell {
+         let update_instruction = if let Some(update_action) = self.update_action {
+             format!("Run {} to update.", update_action.command_str())
+         } else {
+-            "See https://github.com/openai/codex for installation options.".to_string()
++            "See https://github.com/Hubris-tic/zenithal for installation options.".to_string()
+         };
+         vec![
+             Line::from("Update available!"),
+@@ -81,7 +83,7 @@ impl HistoryCell for UpdateAvailableHistoryCell {
+             Line::from(update_instruction),
+             Line::from(""),
+             Line::from("See full release notes:"),
+-            Line::from("https://github.com/openai/codex/releases/latest"),
++            Line::from("https://github.com/Hubris-tic/zenithal/releases/latest"),
+         ]
+     }
+ 
+diff --git a/codex-rs/tui/src/history_cell/session.rs b/codex-rs/tui/src/history_cell/session.rs
+index 237ef9e..7a61054 100644
+--- a/codex-rs/tui/src/history_cell/session.rs
++++ b/codex-rs/tui/src/history_cell/session.rs
+@@ -44,7 +44,7 @@ pub(crate) fn with_border_with_inner_width(
+ pub(crate) fn codex_title(version: &str) -> Vec<Span<'static>> {
+     vec![
+         ">_ ".fg(accent_color()),
+-        "OpenAI Codex".bold(),
++        "Zenithal".bold(),
+         format!(" (v{version})").dim(),
+     ]
+ }
+@@ -383,7 +383,7 @@ impl HistoryCell for SessionHeaderHistoryCell {
+ 
+     fn raw_lines(&self) -> Vec<Line<'static>> {
+         let mut lines = vec![
+-            Line::from(format!("OpenAI Codex (v{})", self.version)),
++            Line::from(format!("Zenithal (v{})", self.version)),
+             Line::from(format!(
+                 "model: {}{}",
+                 self.model,
+diff --git a/codex-rs/tui/src/model_migration.rs b/codex-rs/tui/src/model_migration.rs
+index 47ed0fd..7c6fdc0 100644
+--- a/codex-rs/tui/src/model_migration.rs
++++ b/codex-rs/tui/src/model_migration.rs
+@@ -89,7 +89,7 @@ pub(crate) fn migration_copy_for_models(
+     }
+ 
+     let heading_text = Span::from(format!(
+-        "Codex just got an upgrade. Introducing {target_display_name}."
++        "Zenithal just got an upgrade. Introducing {target_display_name}."
+     ))
+     .bold();
+     let description_line: Line<'static>;
+diff --git a/codex-rs/tui/src/onboarding/welcome.rs b/codex-rs/tui/src/onboarding/welcome.rs
+index 9c9e7b8..672403c 100644
+--- a/codex-rs/tui/src/onboarding/welcome.rs
++++ b/codex-rs/tui/src/onboarding/welcome.rs
+@@ -126,7 +126,7 @@ impl WidgetRef for &WelcomeWidget {
+         lines.push(Line::from(vec![
+             "  ".into(),
+             "Welcome to ".into(),
+-            "Codex".bold(),
++            "Zenithal".bold(),
+             ", OpenAI's command-line coding agent".into(),
+         ]));
+ 
+diff --git a/codex-rs/tui/src/slash_command.rs b/codex-rs/tui/src/slash_command.rs
+index dfd0538..70f62d9 100644
+--- a/codex-rs/tui/src/slash_command.rs
++++ b/codex-rs/tui/src/slash_command.rs
+@@ -92,7 +92,7 @@ impl SlashCommand {
+     /// User-visible description shown in the popup.
+     pub fn description(self) -> &'static str {
+         match self {
+-            SlashCommand::Config => "configure Codex preferences",
++            SlashCommand::Config => "configure Zenithal preferences",
+             SlashCommand::Feedback => "send logs to maintainers",
+             SlashCommand::New => "start a new chat during a conversation",
+             SlashCommand::Init => "create an AGENTS.md file with instructions for Codex",
+@@ -107,7 +107,7 @@ impl SlashCommand {
+             SlashCommand::Fork => "fork the current chat",
+             SlashCommand::Worktree => "start or continue a conversation in a new worktree",
+             SlashCommand::App => "continue this session in the Desktop app",
+-            SlashCommand::Quit | SlashCommand::Exit => "exit Codex",
++            SlashCommand::Quit | SlashCommand::Exit => "exit Zenithal",
+             SlashCommand::Copy => "copy the last response or part of it",
+             SlashCommand::Export => "export the conversation as markdown",
+             SlashCommand::Raw => "toggle raw scrollback mode for copy-friendly terminal selection",
+@@ -146,7 +146,7 @@ impl SlashCommand {
+             SlashCommand::Side | SlashCommand::Btw => {
+                 "start a side conversation in an ephemeral fork"
+             }
+-            SlashCommand::Permissions => "choose what Codex is allowed to do",
++            SlashCommand::Permissions => "choose what Zenithal is allowed to do",
+             SlashCommand::Keymap => "remap TUI shortcuts",
+             SlashCommand::Vim => "toggle Vim mode for the composer",
+             SlashCommand::ElevateSandbox => "set up elevated agent sandbox",
+@@ -156,7 +156,7 @@ impl SlashCommand {
+             SlashCommand::Mcp => "list MCP tools; use /mcp verbose or /mcp login <name>",
+             SlashCommand::Apps => "manage apps",
+             SlashCommand::Plugins => "browse plugins",
+-            SlashCommand::Logout => "log out of Codex",
++            SlashCommand::Logout => "log out of Zenithal",
+             SlashCommand::Rollout => "print the rollout file path",
+             SlashCommand::TestApproval => "test approval request",
+         }
+diff --git a/codex-rs/tui/src/tooltips.rs b/codex-rs/tui/src/tooltips.rs
+index 4319a09..b39d5c1 100644
+--- a/codex-rs/tui/src/tooltips.rs
++++ b/codex-rs/tui/src/tooltips.rs
+@@ -13,16 +13,19 @@ use std::path::Path;
+ #[path = "tooltips/keybinding_tests.rs"]
+ mod keybinding_tests;
+ 
++// NIZARI: upstream fetched this from the openai/codex repo, which meant our TUI
++// displayed OpenAI's announcements as if they were ours. Serve our own file from our
++// own repository; set to None to disable the announcement feature entirely.
+ const ANNOUNCEMENT_TIP_URL: &str =
+-    "https://raw.githubusercontent.com/openai/codex/main/announcement_tip.toml";
++    "https://raw.githubusercontent.com/Hubris-tic/zenithal/main/announcement_tip.toml";
+ 
+ const IS_MACOS: bool = cfg!(target_os = "macos");
+ const IS_WINDOWS: bool = cfg!(target_os = "windows");
+ 
+-const WINDOWS_APP_TOOLTIP: &str = "Use the **desktop app**. Install it from https://chatgpt.com/codex?app-landing-page=true and run `codex app`.";
++const WINDOWS_APP_TOOLTIP: &str = "Tip: start a session with `zenithal` in any project directory.";
+ const MACOS_APP_TOOLTIP: &str =
+-    "Use the **desktop app**. Run `codex app` to open it. It installs automatically if needed.";
+-const LINUX_APP_TOOLTIP: &str = "Use the **desktop app**. Install it from https://learn.chatgpt.com/docs/linux/linux-app and run `chatgpt`.";
++    "Tip: run `zenithal` inside a git repo to get worktree-aware help.";
++const LINUX_APP_TOOLTIP: &str = "Tip: `zenithal --help` lists every command and flag.";
+ 
+ const RAW_TOOLTIPS: &str = include_str!("../assets/tooltips.txt");
+ 
+@@ -249,6 +252,10 @@ pub(crate) mod announcement {
+     }
+ 
+     async fn fetch_announcement_tip_text(http_client_factory: HttpClientFactory) -> Option<String> {
++        // NIZARI: an empty URL disables announcements without a code change.
++        if ANNOUNCEMENT_TIP_URL.is_empty() {
++            return None;
++        }
+         let client = RouteAwareClientPool::new(http_client_factory, ClientRouteClass::Other);
+         let response = client
+             .get(ANNOUNCEMENT_TIP_URL)
+diff --git a/codex-rs/tui/src/update_action.rs b/codex-rs/tui/src/update_action.rs
+index 860d0bd..161785a 100644
+--- a/codex-rs/tui/src/update_action.rs
++++ b/codex-rs/tui/src/update_action.rs
+@@ -29,6 +29,15 @@ pub enum UpdateAction {
+ impl UpdateAction {
+     #[cfg(any(not(debug_assertions), test))]
+     pub(crate) fn from_install_context(context: &InstallContext) -> Option<Self> {
++        // NIZARI: self-update is disabled. Every upstream action here installs
++        // *OpenAI's* CLI into this installation - `npm install -g @openai/codex`,
++        // `brew upgrade --cask codex`, or `curl .../codex/install.sh | sh`. Running any
++        // of them would silently replace Zenithal with upstream. Re-enable only once
++        // our own release channel exists, and point it at our artefacts.
++        let _ = context;
++        if true {
++            return None;
++        }
+         match &context.method {
+             InstallMethod::Npm => Some(UpdateAction::NpmGlobalLatest),
+             InstallMethod::Bun => Some(UpdateAction::BunGlobalLatest),
+@@ -47,16 +56,16 @@ impl UpdateAction {
+     pub fn command_args(self) -> (&'static str, &'static [&'static str]) {
+         match self {
+             UpdateAction::Daemon(source) => ("codex", source.command_args()),
+-            UpdateAction::NpmGlobalLatest => ("npm", &["install", "-g", "@openai/codex"]),
+-            UpdateAction::BunGlobalLatest => ("bun", &["install", "-g", "@openai/codex"]),
+-            UpdateAction::VitePlusGlobalLatest => ("vp", &["install", "-g", "@openai/codex"]),
+-            UpdateAction::PnpmGlobalLatest => ("pnpm", &["add", "-g", "@openai/codex"]),
+-            UpdateAction::BrewUpgrade => ("brew", &["upgrade", "--cask", "codex"]),
++            UpdateAction::NpmGlobalLatest => ("echo", &["self-update is disabled in Zenithal"]),
++            UpdateAction::BunGlobalLatest => ("echo", &["self-update is disabled in Zenithal"]),
++            UpdateAction::VitePlusGlobalLatest => ("echo", &["self-update is disabled in Zenithal"]),
++            UpdateAction::PnpmGlobalLatest => ("echo", &["self-update is disabled in Zenithal"]),
++            UpdateAction::BrewUpgrade => ("echo", &["self-update is disabled in Zenithal"]),
+             UpdateAction::StandaloneUnix => (
+                 "sh",
+                 &[
+                     "-c",
+-                    "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh",
++                    "(self-update disabled in Zenithal; see https://github.com/Hubris-tic/zenithal/releases)",
+                 ],
+             ),
+             UpdateAction::StandaloneWindows => (
+@@ -65,7 +74,7 @@ impl UpdateAction {
+                     "-ExecutionPolicy",
+                     "Bypass",
+                     "-c",
+-                    "$env:CODEX_NON_INTERACTIVE=1; irm https://chatgpt.com/codex/install.ps1 | iex",
++                    "(self-update disabled in Zenithal; see https://github.com/Hubris-tic/zenithal/releases)",
+                 ],
+             ),
+         }
+diff --git a/codex-rs/tui/src/update_prompt.rs b/codex-rs/tui/src/update_prompt.rs
+index 30e948d..057528d 100644
+--- a/codex-rs/tui/src/update_prompt.rs
++++ b/codex-rs/tui/src/update_prompt.rs
+@@ -39,7 +39,7 @@ use ratatui::widgets::Wrap;
+ #[cfg(not(debug_assertions))]
+ use tokio_stream::StreamExt;
+ 
+-const RELEASE_NOTES_URL: &str = "https://github.com/openai/codex/releases/latest";
++const RELEASE_NOTES_URL: &str = "https://github.com/Hubris-tic/zenithal/releases/latest";
+ 
+ #[cfg(not(debug_assertions))]
+ pub(crate) enum UpdatePromptOutcome {
+diff --git a/codex-rs/tui/src/updates.rs b/codex-rs/tui/src/updates.rs
+index 9bbdf31..64f1398 100644
+--- a/codex-rs/tui/src/updates.rs
++++ b/codex-rs/tui/src/updates.rs
+@@ -58,8 +58,10 @@ pub fn get_upgrade_version(config: &Config) -> Option<String> {
+ }
+ 
+ // We use the latest version from the cask if installation is via homebrew - homebrew does not immediately pick up the latest release and can lag behind.
++// zenithal:allow-upstream-url -- INERT: no Homebrew cask exists for this fork.
+ const HOMEBREW_CASK_API_URL: &str = "https://formulae.brew.sh/api/cask/codex.json";
+-const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/openai/codex/releases/latest";
++// NIZARI: was upstream's repo - we must not advertise OpenAI's releases as ours.
++const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/Hubris-tic/zenithal/releases/latest";
+ 
+ #[derive(Deserialize, Debug, Clone)]
+ struct ReleaseInfo {
+diff --git a/codex-rs/tui/tests/brand_urls.rs b/codex-rs/tui/tests/brand_urls.rs
+new file mode 100644
+index 0000000..418ff2e
+--- /dev/null
++++ b/codex-rs/tui/tests/brand_urls.rs
+@@ -0,0 +1,180 @@
++//! NIZARI guard: no shipped code may install, update, or advertise OpenAI's software.
++//!
++//! Two tiers:
++//!   * **hard** patterns fail the build. These are supply-chain and misrouting risks:
++//!     anything that installs OpenAI's CLI/app over ours, or sends our users to
++//!     upstream's tracker, releases, installer scripts or announcement feed.
++//!   * **soft** patterns are reported but do not fail. They are ChatGPT-account
++//!     features (billing banners, help articles) that a BYOK user never reaches, or
++//!     deliberate security policy (the exec-server host allowlist). Tracked in
++//!     `zenithal/rebrand/strings.md` as debt; promoting one to `hard` is the fix.
++//!
++//! Shipped code only: `*_tests.rs`, `tests/` dirs and everything from the first
++//! `#[cfg(test)]` onwards is skipped, because tests legitimately use upstream URLs as
++//! fixtures. Lines starting with `//` are skipped so attribution comments are allowed.
++
++use std::path::{Path, PathBuf};
++
++fn hard_patterns() -> Vec<String> {
++    // Assembled from parts so this file does not trip its own check.
++    let gh = "github.com";
++    let o = "openai";
++    let c = "chatgpt";
++    vec![
++        format!("@{o}/codex"),                      // npm/bun/pnpm/vp package
++        format!("{gh}/{o}/codex/releases"),         // release + release-notes links
++        format!("api.{gh}/repos/{o}/codex"),        // update checks against upstream
++        format!("cask/codex.json"),                 // upstream Homebrew cask
++        format!("{gh}/{o}/codex/issues"),           // bug reports
++        format!("{gh}/{o}/codex/main"),             // announcement feed
++        format!("{c}.com/codex/install"),           // curl | sh installers
++        format!("oaistatic.com/codex-app-prod"),    // desktop app downloads
++        format!("\"--cask\", \"codex\""),           // brew cask
++    ]
++}
++
++fn soft_patterns() -> Vec<String> {
++    let o = "openai";
++    let c = "chatgpt";
++    vec![
++        format!("help.{o}.com"),
++        format!("developers.{o}.com"),
++        format!("auth.{o}.com"),
++        format!("{o}.com/form"),
++        format!("{c}.com/settings"),
++        format!("{c}.com/admin"),
++        format!("{c}.com/backend-api"),
++        format!("learn.{c}.com"),
++        format!("persistent.oaistatic.com"),
++    ]
++}
++
++fn roots() -> Vec<PathBuf> {
++    let tui = Path::new(env!("CARGO_MANIFEST_DIR"));
++    let ws = tui.parent().expect("codex-rs");
++    vec![tui.join("src"), ws.join("cli").join("src")]
++}
++
++fn walk(dir: &Path, files: &mut Vec<PathBuf>) {
++    let Ok(entries) = std::fs::read_dir(dir) else { return };
++    for entry in entries.flatten() {
++        let p = entry.path();
++        if p.is_dir() {
++            if p.file_name().and_then(|n| n.to_str()) == Some("tests") {
++                continue;
++            }
++            walk(&p, files);
++        } else if p.extension().and_then(|e| e.to_str()) == Some("rs") {
++            files.push(p);
++        }
++    }
++}
++
++fn shipped_lines(path: &Path) -> Vec<(usize, String)> {
++    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
++    if name.ends_with("_tests.rs") || name == "tests.rs" {
++        return Vec::new();
++    }
++    let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
++    let mut out = Vec::new();
++    for (i, line) in text.lines().enumerate() {
++        let t = line.trim_start();
++        if t.starts_with("#[cfg(test)]") || t.starts_with("#[cfg(all(test") {
++            break;
++        }
++        out.push((i + 1, line.to_string()));
++    }
++    out
++}
++
++fn scan(patterns: &[String]) -> Vec<String> {
++    let mut files = Vec::new();
++    for r in roots() {
++        walk(&r, &mut files);
++    }
++    assert!(
++        files.len() > 100,
++        "expected to scan tui+cli sources, found only {} files",
++        files.len()
++    );
++    let mut hits = Vec::new();
++    for f in &files {
++        let lines = shipped_lines(f);
++        for (idx, (line_no, line)) in lines.iter().enumerate() {
++            if line.trim_start().starts_with("//") {
++                continue;
++            }
++            // Explicit, auditable opt-out for a line that must reference upstream.
++            // A marker may sit a couple of comment lines above the code it excuses.
++            let window: String = lines[idx.saturating_sub(3)..idx]
++                .iter()
++                .map(|(_, l)| l.as_str())
++                .collect::<Vec<_>>()
++                .join("\n");
++            if line.contains("zenithal:allow-upstream-url") || window.contains("zenithal:allow-upstream-url") {
++                continue;
++            }
++            for pattern in patterns {
++                if line.contains(pattern.as_str()) {
++                    hits.push(format!(
++                        "{}:{}  '{}'\n      {}",
++                        f.display(),
++                        line_no,
++                        pattern,
++                        line.trim()
++                    ));
++                }
++            }
++        }
++    }
++    hits
++}
++
++#[test]
++fn no_supply_chain_or_misrouting_urls() {
++    let hits = scan(&hard_patterns());
++    assert!(
++        hits.is_empty(),
++        "Zenithal must not install, update, or advertise OpenAI's software.\n\
++         {} occurrence(s):\n\n{}\n\n\
++         These are supply-chain risks: `update` running `npm i -g @openai/codex` or\n\
++         `curl chatgpt.com/codex/install.sh | sh` replaces this fork with upstream.\n\
++         Fix by removing the feature or pointing it at our own releases.",
++        hits.len(),
++        hits.join("\n")
++    );
++}
++
++/// Informational: prints remaining ChatGPT-account coupling. Never fails, so it cannot
++/// block a release on cosmetic debt - but the count is visible in test output.
++#[test]
++fn audit_remaining_openai_coupling() {
++    let hits = scan(&soft_patterns());
++    if hits.is_empty() {
++        return;
++    }
++    println!(
++        "NIZARI audit: {} openai/chatgpt references remain in shipped code \
++         (ChatGPT-account features and security policy). See zenithal/rebrand/strings.md.",
++        hits.len()
++    );
++    for h in hits.iter().take(40) {
++        println!("  {h}");
++    }
++}
++
++#[test]
++fn attribution_is_present() {
++    // Apache-2.0 section 4(b): a fork must state that it is modified.
++    let ws = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
++    let mut found = false;
++    for candidate in ["NOTICE", "README.md", "LICENSE"] {
++        if let Ok(text) = std::fs::read_to_string(ws.join(candidate)) {
++            if text.to_lowercase().contains("codex") {
++                found = true;
++                break;
++            }
++        }
++    }
++    assert!(found, "no attribution to the upstream project in NOTICE/README/LICENSE");
++}

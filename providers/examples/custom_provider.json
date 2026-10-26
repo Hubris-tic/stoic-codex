@@ -1,0 +1,13 @@
+{
+  "//": "Bring-your-own provider. Copy next to your config and edit. No key belongs in this file: name an environment variable instead.",
+  "id": "my-lab",
+  "label": "My lab box",
+  "base_url": "http://127.0.0.1:8080",
+  "path": "/v1/chat/completions",
+  "api_key_env": "LAB_API_KEY",
+  "api_style": "openai",
+  "auth": { "kind": "header", "name": "x-api-key", "prefix": "" },
+  "headers": { "x-route": "fleet-a" },
+  "models": ["my-model-7b"],
+  "local": true
+}

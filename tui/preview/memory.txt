@@ -1,0 +1,34 @@
+◍ zenithal  │   mission   diff ▸ memory   hole                                                                     on main   7 nodes
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ src/auth.rs   depth 2   7 nodes                                                                                                    
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ .. ▪ src/auth.rs                                                                                                          0.91  ←  
+ !!   ◆ use argon2 over sha256                                                                                             0.94     
+      ƒ fn verify                                                                                                          0.66     
+      ● 4f2c1ab add argon2                                                                                                 0.38     
+      ▸ refactor-auth                                                                                                      0.33     
+        ✗ timing leak in verify                                                                                            0.61     
+        ƒ fn rotate_key                                                                                                    0.44     
+                                                                                                                                    
+  imports=>  calls->  derived_from..  regresses!!   +/- depth                                                                       
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+                                                                                                                                    
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ depth 2  focus src/auth.rs                                                            +/- depth · j/k scroll · enter open · q quit 

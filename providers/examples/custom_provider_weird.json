@@ -1,0 +1,32 @@
+{
+  "//": "The full escape hatch: an API that is not OpenAI-shaped at all. Templates are JSON with {{placeholders}}; paths are dotted lookups into the response.",
+  "id": "weird-api",
+  "base_url": "https://api.example.com",
+  "path": "/infer",
+  "api_key_env": "EXAMPLE_API_KEY",
+  "api_style": "custom",
+  "auth": { "kind": "bearer" },
+  "request": {
+    "engine": "v2",
+    "prompt": "{{text}}",
+    "system": "{{system}}",
+    "max_new_tokens": "{{max_tokens}}",
+    "stream": "{{stream}}",
+    "functions": "{{tools}}"
+  },
+  "response": {
+    "text": "output.text",
+    "model": "output.model",
+    "stop": "output.finish",
+    "tool_calls": "output.calls",
+    "usage": { "input": "output.tokens.in", "output": "output.tokens.out" }
+  },
+  "stream": {
+    "text_delta": "delta.text",
+    "thinking_delta": "delta.reasoning",
+    "tool_call": { "index": "delta.call.i", "id": "delta.call.id", "name": "delta.call.name", "arguments": "delta.call.args" },
+    "done_marker": "[EOS]"
+  },
+  "stop_reasons": { "cutoff": "max_tokens", "eos": "end_turn" },
+  "models": ["weird-1"]
+}

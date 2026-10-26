@@ -1,0 +1,8 @@
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"I'll open "}]},"index":0}],"usageMetadata":{"promptTokenCount":1024,"candidatesTokenCount":5}}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"that file."}]},"index":0}]}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"read_file","args":{"path":"src/main.rs","line":42}}}]},"index":0}],"usageMetadata":{"promptTokenCount":1024,"candidatesTokenCount":57,"cachedContentTokenCount":900,"thoughtsTokenCount":12}}
+
+data: {"candidates":[{"content":{"role":"model","parts":[]},"finishReason":"STOP","index":0}]}
+
