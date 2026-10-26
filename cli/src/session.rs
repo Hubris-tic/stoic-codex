@@ -101,12 +101,12 @@ mod tests {
     }
 
     #[test]
-    fn the_identity_comes_from_the_brand_crate() {
+    fn the_identity_comes_from_the_brand_crate_without_upstream_attribution() {
         let p = system_prompt(&MemoryBlock::empty());
         assert!(p.contains(brand::NAME), "{p}");
         assert!(
-            !p.contains("Codex"),
-            "must never leak the upstream product name: {p}"
+            !p.to_ascii_lowercase().contains("openai"),
+            "must not inject upstream attribution into the prompt: {p}"
         );
     }
 

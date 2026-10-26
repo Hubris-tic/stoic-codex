@@ -160,7 +160,10 @@ pub fn run(argv: &[String], ctx: &mut Ctx) -> i32 {
             let _ = writeln!(
                 ctx.err,
                 "migrated local config from {} to {}",
-                paths.home().join(stoic_codex_brand::LEGACY_CONFIG_DIR).display(),
+                paths
+                    .home()
+                    .join(stoic_codex_brand::LEGACY_CONFIG_DIR)
+                    .display(),
                 paths.config_dir().display()
             );
         }
@@ -229,11 +232,11 @@ pub fn help_text() -> String {
     h.push_str("\nUSAGE\n  stoic-codex <command> [options]\n");
 
     h.push_str("\nRUN (memory → prompt → provider → answer → local transcript)\n");
+    h.push_str("  stoic-codex run <task…>                    send a turn; transcript is local\n");
+    h.push_str("                                        (--provider, --model, --max-tokens, --max-attempts N,\n");
     h.push_str(
-        "  stoic-codex run <task…>                    send a turn; transcript is local\n",
+        "                                         --temperature, --continue, --resume ID,\n",
     );
-    h.push_str("                                        (--provider, --model, --max-tokens,\n");
-    h.push_str("                                         --temperature, --continue, --resume ID,\n");
     h.push_str("                                         --no-session, --no-stream, --dry-run,\n");
     h.push_str("                                         --no-memory, --no-remember, --json)\n");
 
@@ -244,9 +247,11 @@ pub fn help_text() -> String {
     h.push_str(
         "                                        (--repo, --read-only, --allow-shell a,b,\n",
     );
-    h.push_str("                                         --max-steps, --json, --quiet)\n");
+    h.push_str("                                         --max-steps, --max-attempts N, --json, --quiet)\n");
     h.push_str("  stoic-codex tools                          the tools an agent is given\n");
-    h.push_str("  stoic-codex tools --json                   ...as the JSON Schema the model sees\n");
+    h.push_str(
+        "  stoic-codex tools --json                   ...as the JSON Schema the model sees\n",
+    );
 
     h.push_str("\nMISSION (Strategos plans; N Operator work in N isolated git worktrees)\n");
     h.push_str(
@@ -260,10 +265,10 @@ pub fn help_text() -> String {
         "                                         --no-review, --no-commit, --parallel N,\n",
     );
     h.push_str(
-        "                                         --keep-worktrees, --keep-branches, --json)\n",
+        "                                         --keep-worktrees, --keep-branches, --max-attempts N, --json)\n",
     );
     h.push_str(
-        "  stoic-codex mission plan <task…>           show the assignments and stop (--json)\n",
+        "  stoic-codex mission plan <task…>           show the assignments and stop (--max-attempts N, --json)\n",
     );
 
     h.push_str("\nPROVIDERS (BYOK; built-in ids plus any spec you write)\n");
@@ -273,11 +278,14 @@ pub fn help_text() -> String {
     h.push_str(
         "  stoic-codex providers add <file.json>      validate a provider spec and install it\n",
     );
-    h.push_str("  stoic-codex providers show <id>            show the exact request it would send\n");
     h.push_str(
-        "  stoic-codex providers models <id> [--free] list the provider's reported model catalogue\n",
+        "  stoic-codex providers show <id>            show the exact request it would send\n",
+    );
+    h.push_str(
+        "  stoic-codex providers models <id> [--free] [--max-attempts N] list the reported model catalogue\n",
     );
     h.push_str("  stoic-codex providers test <id> --model M  send one real completion request and report it\n");
+    h.push_str("                                        (--max-tokens N, --max-attempts N)\n");
     h.push_str("  stoic-codex providers ids                  print every built-in provider id\n");
 
     h.push_str("\nMEMORY (local only: a local TypeDB daemon, or a file under ~/");
@@ -289,7 +297,9 @@ pub fn help_text() -> String {
     h.push_str(
         "  stoic-codex memory recall <query>          rank memories (--focus, --limit, --json)\n",
     );
-    h.push_str("  stoic-codex memory why <query>             show the score breakdown for each hit\n");
+    h.push_str(
+        "  stoic-codex memory why <query>             show the score breakdown for each hit\n",
+    );
     h.push_str("  stoic-codex memory forget <id>             drop one memory and its edges\n");
     h.push_str("  stoic-codex memory stats                   backend, counts, paths\n");
 
@@ -300,7 +310,9 @@ pub fn help_text() -> String {
     h.push_str("                                        (--budget, --system-only, --json)\n");
 
     h.push_str("\nDAEMON\n");
-    h.push_str("  stoic-codex daemon status                  is a local TypeDB running, and where\n");
+    h.push_str(
+        "  stoic-codex daemon status                  is a local TypeDB running, and where\n",
+    );
 
     h.push_str("\nGLOBAL\n");
     h.push_str("  --json            machine-readable output where supported\n");

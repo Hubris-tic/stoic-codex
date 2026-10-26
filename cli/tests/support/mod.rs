@@ -163,6 +163,26 @@ pub fn openai_sse(text_chunks: &[&str]) -> Vec<u8> {
     with_headers(&body, "text/event-stream")
 }
 
+/// An OpenAI-style stream whose final usage event has no trailing blank line or DONE frame.
+/// This models a provider closing the socket as soon as its last usage bytes are sent.
+pub fn openai_sse_final_usage() -> Vec<u8> {
+    let text = serde_json::json!({
+        "id": "chatcmpl-test",
+        "object": "chat.completion.chunk",
+        "model": "test-model",
+        "choices": [{ "index": 0, "delta": { "content": "answer" }, "finish_reason": serde_json::Value::Null }],
+    });
+    let usage = serde_json::json!({
+        "id": "chatcmpl-test",
+        "object": "chat.completion.chunk",
+        "model": "test-model",
+        "choices": [],
+        "usage": { "prompt_tokens": 13, "completion_tokens": 5, "total_tokens": 18 },
+    });
+    let body = format!("data: {text}\n\ndata: {usage}");
+    with_headers(&body, "text/event-stream")
+}
+
 /// A whole JSON completion, for servers that ignore `stream: true`.
 pub fn openai_json(text: &str) -> Vec<u8> {
     let body = serde_json::json!({

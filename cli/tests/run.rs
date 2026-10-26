@@ -6,8 +6,8 @@
 
 mod support;
 
-use support::{closed_port, error_body, openai_json, openai_sse, Stub};
 use stoic_codex_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
+use support::{closed_port, error_body, openai_json, openai_sse, openai_sse_final_usage, Stub};
 
 struct Rig {
     home: std::path::PathBuf,
@@ -17,7 +17,8 @@ struct Rig {
 
 impl Rig {
     fn new(tag: &str, config: &str) -> Rig {
-        let home = std::env::temp_dir().join(format!("stoic-codex-run-{tag}-{}", std::process::id()));
+        let home =
+            std::env::temp_dir().join(format!("stoic-codex-run-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         let dir = home.join(".stoic-codex");
         std::fs::create_dir_all(&dir).unwrap();
@@ -110,6 +111,27 @@ fn a_turn_streams_the_answer_and_writes_it_back_to_memory() {
 }
 
 #[test]
+fn trailing_openai_usage_frame_is_consumed_when_the_socket_closes() {
+    let stub = Stub::start(openai_sse_final_usage());
+    let mut rig = Rig::pointed("lateusage", &stub.base_url(), "");
+    set_key("lateusage", "k");
+
+    assert_eq!(rig.run(&["run", "hello"]), OK);
+    assert_eq!(rig.out().trim(), "answer");
+    assert!(
+        rig.err().contains("in 13 out 5 tok"),
+        "the EOF-terminated usage frame was dropped: {}",
+        rig.err()
+    );
+    let requests = stub.join();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        request_body(&requests[0])["stream_options"]["include_usage"],
+        true
+    );
+}
+
+#[test]
 fn a_server_that_ignores_streaming_still_works() {
     // Some local servers answer even a `stream: true` request with one JSON document.
     let stub = Stub::start(openai_json("a whole answer"));
@@ -196,6 +218,120 @@ fn a_rate_limited_turn_is_retried_and_the_answer_still_arrives() {
 }
 
 #[test]
+fn max_attempts_flag_overrides_the_configured_retry_limit() {
+    let stub = Stub::script(
+        "retry-override",
+        vec![
+            error_body(
+                "429 Too Many Requests",
+                r#"{"error":{"type":"rate_limit_error","message":"slow down"}}"#,
+            ),
+            openai_json("retry succeeded"),
+        ],
+    );
+    let mut rig = Rig::pointed("retryoverride", &stub.base_url(), r#", "max_attempts": 1"#);
+    set_key("retryoverride", "k");
+
+    assert_eq!(
+        rig.run(&["run", "hello", "--max-attempts=2"]),
+        OK,
+        "the CLI override can enable one retry even when config disables it: {}",
+        rig.err()
+    );
+    assert_eq!(rig.out().trim(), "retry succeeded");
+    assert_eq!(stub.join().len(), 2);
+}
+
+#[test]
+fn max_attempts_one_fails_fast_even_when_config_allows_retries() {
+    let stub = Stub::script(
+        "retry-fast",
+        vec![
+            error_body(
+                "429 Too Many Requests",
+                r#"{"error":{"type":"rate_limit_error","message":"slow down"}}"#,
+            ),
+            openai_json("this must not be requested"),
+        ],
+    );
+    let mut rig = Rig::pointed("retryfast", &stub.base_url(), r#", "max_attempts": 4"#);
+    set_key("retryfast", "k");
+
+    assert_eq!(rig.run(&["run", "hello", "--max-attempts", "1"]), FAILED);
+    assert!(rig.err().contains("slow down"), "{}", rig.err());
+    assert_eq!(stub.join().len(), 1, "the second attempt must not be sent");
+}
+
+#[test]
+fn agent_run_uses_the_per_command_retry_override() {
+    let stub = Stub::script(
+        "agent-retry",
+        vec![
+            error_body(
+                "429 Too Many Requests",
+                r#"{"error":{"type":"rate_limit_error","message":"slow down"}}"#,
+            ),
+            openai_json("agent answer"),
+        ],
+    );
+    let mut rig = Rig::pointed("agentretry", &stub.base_url(), r#", "max_attempts": 1"#);
+    set_key("agentretry", "k");
+    let repo = rig.home.join("agent-repo");
+    std::fs::create_dir_all(&repo).unwrap();
+
+    assert_eq!(
+        rig.run(&[
+            "agent",
+            "run",
+            "say hello",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--read-only",
+            "--max-attempts",
+            "2",
+        ]),
+        OK,
+        "{}",
+        rig.err()
+    );
+    assert!(rig.out().contains("agent answer"), "{}", rig.out());
+    assert_eq!(stub.join().len(), 2);
+}
+
+#[test]
+fn providers_test_uses_the_per_command_retry_override() {
+    let stub = Stub::script(
+        "provider-retry",
+        vec![
+            error_body(
+                "429 Too Many Requests",
+                r#"{"error":{"type":"rate_limit_error","message":"slow down"}}"#,
+            ),
+            openai_json("pong"),
+        ],
+    );
+    let mut rig = Rig::pointed("providerretry", &stub.base_url(), r#", "max_attempts": 1"#);
+    set_key("providerretry", "k");
+
+    assert_eq!(
+        rig.run(&[
+            "providers",
+            "test",
+            "openai-chat",
+            "--model",
+            "tiny",
+            "--max-attempts",
+            "2",
+        ]),
+        OK,
+        "{}",
+        rig.err()
+    );
+    assert!(rig.out().contains("reply      pong"), "{}", rig.out());
+    assert_eq!(stub.join().len(), 2);
+}
+
+#[test]
 fn dry_run_prints_the_request_and_opens_no_socket() {
     let port = closed_port();
     let mut rig = Rig::pointed("dry", &format!("http://127.0.0.1:{port}"), "");
@@ -256,7 +392,13 @@ fn conversations_continue_and_resume_with_canonical_message_history() {
     let session_id = first["session_id"].as_str().expect("session id").to_owned();
 
     assert_eq!(
-        rig.run(&["run", "second question", "--continue", "--no-memory", "--json"]),
+        rig.run(&[
+            "run",
+            "second question",
+            "--continue",
+            "--no-memory",
+            "--json"
+        ]),
         OK
     );
     let second: serde_json::Value = serde_json::from_str(&rig.out()).unwrap();
@@ -278,14 +420,31 @@ fn conversations_continue_and_resume_with_canonical_message_history() {
 
     let requests = stub.join();
     assert_eq!(requests.len(), 3);
-    let first_messages = request_body(&requests[0])["messages"].as_array().unwrap().clone();
-    let second_messages = request_body(&requests[1])["messages"].as_array().unwrap().clone();
-    let third_messages = request_body(&requests[2])["messages"].as_array().unwrap().clone();
+    let first_messages = request_body(&requests[0])["messages"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let second_messages = request_body(&requests[1])["messages"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let third_messages = request_body(&requests[2])["messages"]
+        .as_array()
+        .unwrap()
+        .clone();
     assert_eq!(first_messages.len(), 2, "system plus first user turn");
     assert_eq!(first_messages[0]["role"], "system");
     assert_eq!(first_messages[1]["role"], "user");
-    assert_eq!(second_messages.len(), 4, "system plus one complete turn and the new user");
-    assert_eq!(third_messages.len(), 6, "system plus two complete turns and the new user");
+    assert_eq!(
+        second_messages.len(),
+        4,
+        "system plus one complete turn and the new user"
+    );
+    assert_eq!(
+        third_messages.len(),
+        6,
+        "system plus two complete turns and the new user"
+    );
     assert_eq!(second_messages[1]["content"], "first question");
     assert_eq!(second_messages[2]["content"], "first answer");
     assert_eq!(second_messages[3]["content"], "second question");
@@ -296,10 +455,9 @@ fn conversations_continue_and_resume_with_canonical_message_history() {
     // Context pruning affects only the request copy; the local transcript retains the whole
     // conversation for a future model with a larger context window.
     let paths = rig.home.join(".stoic-codex").join("sessions");
-    let saved: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(paths.join(format!("{session_id}.json"))).unwrap(),
-    )
-    .unwrap();
+    let saved: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(paths.join(format!("{session_id}.json"))).unwrap())
+            .unwrap();
     assert_eq!(saved["messages"].as_array().unwrap().len(), 6);
 }
 

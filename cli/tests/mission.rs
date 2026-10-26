@@ -12,8 +12,8 @@ mod support;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use support::{openai_json, openai_tool_call, Stub};
 use stoic_codex_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
+use support::{error_body, openai_json, openai_tool_call, Stub};
 
 // ── a repository on disk ────────────────────────────────────────────────────────────────
 
@@ -118,12 +118,13 @@ impl Rig {
                 "model": "test-model",
                 "base_url": "{base_url}",
                 "api_key_env": "STOIC_CODEX_MISSION_TEST_KEY",
-                "max_tokens": 512
+                "max_tokens": 512,
+                "max_attempts": 1
               }}
             }}"#
         );
         std::fs::write(dir.join("config.json"), config).unwrap();
-        std::env::set_var("STOIC_CODEX_MISSION_TEST_KEY", "sk-test-not-a-real-key");
+        std::env::set_var("STOIC_CODEX_MISSION_TEST_KEY", "fixture-test-key");
         let (ctx, buffers) = Ctx::buffered(home.clone());
         Rig { home, ctx, buffers }
     }
@@ -557,6 +558,44 @@ fn mission_plan_shows_the_assignments_and_changes_nothing() {
 }
 
 #[test]
+fn mission_plan_uses_the_per_command_retry_override() {
+    let repo = Repo::new("plan-retry");
+    let stub = Stub::script(
+        "plan-retry",
+        vec![
+            error_body(
+                "429 Too Many Requests",
+                r#"{"error":{"type":"rate_limit_error","message":"slow down"}}"#,
+            ),
+            three_way_plan(),
+        ],
+    );
+    let mut rig = Rig::new("plan-retry", &stub.base_url());
+
+    assert_eq!(
+        rig.invoke(&[
+            "mission",
+            "plan",
+            "add one file per code",
+            "--repo",
+            repo.root.to_str().unwrap(),
+            "--max-attempts",
+            "2",
+        ]),
+        OK,
+        "stderr:\n{}",
+        rig.err()
+    );
+    assert!(rig.out().contains("x1-write"), "{}", rig.out());
+    assert_eq!(stub.join().len(), 2);
+    assert_eq!(
+        repo.log().len(),
+        1,
+        "planning must not modify the repository"
+    );
+}
+
+#[test]
 fn mission_plan_json_is_machine_readable() {
     let repo = Repo::new("plan-json");
     let stub = Stub::script("plan-json", vec![three_way_plan()]);
@@ -748,7 +787,8 @@ fn a_verify_command_that_fails_rejects_the_work() {
 fn a_missing_provider_is_a_usage_error_before_anything_is_created() {
     let repo = Repo::new("no-provider");
     // A home with no config at all.
-    let home = std::env::temp_dir().join(format!("stoic-codex-mission-bare-{}", std::process::id()));
+    let home =
+        std::env::temp_dir().join(format!("stoic-codex-mission-bare-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
     let (mut ctx, buffers) = Ctx::buffered(home.clone());

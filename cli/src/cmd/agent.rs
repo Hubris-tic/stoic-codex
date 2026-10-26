@@ -37,12 +37,13 @@ fn one(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     if task.is_empty() {
         return Err(CmdError::usage(
             "usage: stoic-codex agent run <task…> [--provider ID] [--model M] [--repo DIR] \
-             [--allow-shell a,b] [--read-only] [--max-steps N]",
+             [--allow-shell a,b] [--read-only] [--max-steps N] [--max-attempts N]",
         ));
     }
 
-    let cfg = Config::load_for(paths).map_err(CmdError::failed)?;
+    let mut cfg = Config::load_for(paths).map_err(CmdError::failed)?;
     cfg.validate().map_err(CmdError::failed)?;
+    crate::cmd::run::apply_retry_override(parsed, &mut cfg)?;
 
     let provider = parsed
         .value("provider")

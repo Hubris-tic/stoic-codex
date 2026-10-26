@@ -8,8 +8,8 @@
 mod support;
 
 use std::path::{Path, PathBuf};
-use support::Stub;
 use stoic_codex_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
+use support::{error_body, Stub};
 
 struct Rig {
     home: PathBuf,
@@ -19,7 +19,8 @@ struct Rig {
 
 impl Rig {
     fn new(tag: &str) -> Rig {
-        let home = std::env::temp_dir().join(format!("stoic-codex-cli-{tag}-{}", std::process::id()));
+        let home =
+            std::env::temp_dir().join(format!("stoic-codex-cli-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(&home).unwrap();
         let (ctx, buffers) = Ctx::buffered(home.clone());
@@ -195,6 +196,56 @@ fn providers_models_lists_only_explicitly_free_models_without_a_completion() {
         !requests[0].contains("model-paid"),
         "a model list is a GET with no prompt body: {requests:?}"
     );
+}
+
+#[test]
+fn providers_models_uses_the_per_command_retry_override() {
+    let catalogue = serde_json::json!({
+        "data": [{"id": "router-model", "context_length": 32768}]
+    })
+    .to_string();
+    let success = format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{}",
+        catalogue.len(),
+        catalogue
+    )
+    .into_bytes();
+    let stub = Stub::script(
+        "models-retry",
+        vec![
+            error_body(
+                "429 Too Many Requests",
+                r#"{"error":{"type":"rate_limit_error","message":"slow down"}}"#,
+            ),
+            success,
+        ],
+    );
+    let mut rig = Rig::new("models-retry");
+    rig.write_config(r#"{"memory":{"backend":"file"},"providers":{"max_attempts":1}}"#);
+    let spec = spec_file(
+        &std::env::temp_dir().join(format!(
+            "stoic-codex-cli-src-model-retry-{}",
+            std::process::id()
+        )),
+        "router.json",
+        &format!(
+            r#"{{"id":"router","base_url":"{}","path":"/v1/chat/completions","api_style":"openai"}}"#,
+            stub.base_url()
+        ),
+    );
+    assert_eq!(rig.run(&["providers", "add", spec.to_str().unwrap()]), OK);
+    assert_eq!(
+        rig.run(&["providers", "models", "router", "--max-attempts", "2"]),
+        OK,
+        "{}",
+        rig.err()
+    );
+    assert!(rig.out().contains("router-model"), "{}", rig.out());
+    let requests = stub.join();
+    assert_eq!(requests.len(), 2);
+    assert!(requests
+        .iter()
+        .all(|request| request.starts_with("GET /v1/models ")));
 }
 
 #[test]
@@ -591,8 +642,9 @@ fn a_typo_in_the_config_is_rejected() {
 // ─── brand guard ────────────────────────────────────────────────────────────
 
 #[test]
-fn no_command_ever_prints_the_upstream_product_name() {
-    // A cheap, broad guard: the rebrand is only real if the binary never says "Codex".
+fn user_facing_brand_is_stoic_codex_and_upstream_attribution_is_preserved() {
+    // Stoic Codex is the product identity; `openai/codex` remains as Apache-required
+    // attribution and an upstream repository identifier.
     let mut rig = Rig::new("brand");
     let mut all = String::new();
     for argv in [
@@ -608,7 +660,16 @@ fn no_command_ever_prints_the_upstream_product_name() {
         all.push_str(&rig.err());
     }
     assert!(
-        !all.contains("Codex"),
-        "upstream product name leaked:\n{all}"
+        all.contains("Stoic Codex"),
+        "product identity missing:\n{all}"
+    );
+    assert!(
+        all.contains("fork of openai/codex"),
+        "attribution missing:\n{all}"
+    );
+    assert!(!all.contains("Zenithal"), "old product name leaked:\n{all}");
+    assert!(
+        !all.contains("OpenAI Codex"),
+        "upstream product identity leaked:\n{all}"
     );
 }

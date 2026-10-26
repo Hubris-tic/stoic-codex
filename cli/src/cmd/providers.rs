@@ -48,7 +48,7 @@ fn ids(ctx: &mut Ctx) -> CmdResult {
 fn models(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let Some(id) = parsed.rest().get(1) else {
         return Err(CmdError::usage(
-            "usage: stoic-codex providers models <id> [--free]",
+            "usage: stoic-codex providers models <id> [--free] [--max-attempts N]",
         ));
     };
     let cfg = Config::load_for(paths).map_err(CmdError::failed)?;
@@ -77,11 +77,12 @@ fn models(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         http.url = crate::cmd::run::reroute(base, &http.url).map_err(CmdError::failed)?;
     }
 
+    let policy = crate::cmd::run::retry_policy_for(parsed, &cfg)?;
     let transport = LiveTransport::new(Duration::from_secs(cfg.providers.timeout_secs.min(60)));
     let (response, body) = crate::retry::buffered(
         &transport,
         &http,
-        &crate::cmd::run::retry_policy(&cfg),
+        &policy,
         &mut |line| {
             let _ = writeln!(ctx.err, "\u{1b}[2m{line}\u{1b}[0m");
         },
@@ -304,7 +305,7 @@ fn show(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
 fn test(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let Some(id) = parsed.rest().get(1) else {
         return Err(CmdError::usage(
-            "usage: stoic-codex providers test <id> [--model M] [--prompt TEXT] [--max-tokens N]",
+            "usage: stoic-codex providers test <id> [--model M] [--prompt TEXT] [--max-tokens N] [--max-attempts N]",
         ));
     };
     let cfg = Config::load_for(paths).map_err(CmdError::failed)?;
@@ -350,6 +351,7 @@ fn test(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         http.url = crate::cmd::run::reroute(base, &http.url).map_err(CmdError::failed)?;
     }
 
+    let policy = crate::cmd::run::retry_policy_for(parsed, &cfg)?;
     let transport = LiveTransport::new(Duration::from_secs(cfg.providers.timeout_secs.min(60)));
     let started = Instant::now();
     // A model listing is idempotent, so retrying it is always safe — and a free tier will
@@ -357,7 +359,7 @@ fn test(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let (response, body) = crate::retry::buffered(
         &transport,
         &http,
-        &crate::cmd::run::retry_policy(&cfg),
+        &policy,
         &mut |line| {
             let _ = writeln!(ctx.err, "\u{1b}[2m{line}\u{1b}[0m");
         },
@@ -385,26 +387,35 @@ fn test(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         let mut sse = stoic_codex_providers::SseDecoder::new();
         let mut text = String::new();
         let mut usage = stoic_codex_providers::Usage::default();
-        for frame in sse.push(&body) {
-            for event in decoder
-                .push_frame(&frame)
-                .map_err(|e| CmdError::failed(format!("cannot decode the stream: {e}")))?
-            {
+        let mut collect = |events: Vec<stoic_codex_providers::CanonicalEvent>| {
+            for event in events {
                 match event {
-                    stoic_codex_providers::CanonicalEvent::TextDelta { text: t } => text.push_str(&t),
-                    stoic_codex_providers::CanonicalEvent::Usage { usage: u } => usage.merge_max(&u),
+                    stoic_codex_providers::CanonicalEvent::TextDelta { text: delta } => {
+                        text.push_str(&delta)
+                    }
+                    stoic_codex_providers::CanonicalEvent::Usage { usage: update } => {
+                        usage.merge_max(&update)
+                    }
                     _ => {}
                 }
             }
+        };
+        for frame in sse.push(&body) {
+            let events = decoder
+                .push_frame(&frame)
+                .map_err(|e| CmdError::failed(format!("cannot decode the stream: {e}")))?;
+            collect(events);
         }
-        for event in decoder
+        if let Some(frame) = sse.finish() {
+            let events = decoder
+                .push_frame(&frame)
+                .map_err(|e| CmdError::failed(format!("cannot decode the stream: {e}")))?;
+            collect(events);
+        }
+        let events = decoder
             .finish()
-            .map_err(|e| CmdError::failed(format!("cannot finish the stream: {e}")))?
-        {
-            if let stoic_codex_providers::CanonicalEvent::Usage { usage: u } = event {
-                usage.merge_max(&u);
-            }
-        }
+            .map_err(|e| CmdError::failed(format!("cannot finish the stream: {e}")))?;
+        collect(events);
         let _ = writeln!(ctx.out, "provider   {provider}");
         let _ = writeln!(ctx.out, "model      {model}");
         let _ = writeln!(

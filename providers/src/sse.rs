@@ -121,3 +121,19 @@ fn parse_frame(raw: &str) -> Option<SseFrame> {
     frame.data = data_lines.join("\n");
     Some(frame)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finish_dispatches_a_trailing_frame_without_a_blank_line() {
+        let mut decoder = SseDecoder::new();
+        assert!(decoder
+            .push("data: {\"usage\":{\"prompt_tokens\":11}}")
+            .is_empty());
+        let frame = decoder.finish().expect("EOF flushes the final event");
+        assert_eq!(frame.data, "{\"usage\":{\"prompt_tokens\":11}}");
+        assert!(decoder.finish().is_none(), "finish is one-shot");
+    }
+}

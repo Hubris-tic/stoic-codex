@@ -54,6 +54,7 @@ misspelled key is a hard error, not a silent no-op.
     "temperature": 0.2,
     "stream": true,
     "timeout_secs": 120,
+    "max_attempts": 4,
     "base_url": null
   }
 }
@@ -83,6 +84,7 @@ stoic-codex run "..." --provider lab --model tiny      # pick the provider per c
 stoic-codex run "..." --no-stream                      # one request, one JSON reply
 stoic-codex run "..." --dry-run                        # print the exact request, send nothing
 stoic-codex run "..." --json                           # one JSON object: text, usage, cost
+stoic-codex run "..." --max-attempts 1                 # fail fast instead of retrying
 stoic-codex run "..." --no-session --no-memory --no-remember  # a stateless turn
 ```
 
@@ -91,6 +93,10 @@ provider's adapter → put it on the socket → decode the stream → print → 
 back to memory. The answer goes to **stdout**, the accounting (provider, model, tokens,
 latency, rate-card cost estimate) to **stderr**, so `stoic-codex run "…" > answer.md` gives you a clean file.
 The estimate is not billing data; JSON output labels it with `cost_basis: registry_rate_estimate`.
+
+Provider requests use four attempts by default, configurable with `providers.max_attempts`.
+Pass `--max-attempts N` to override that limit for one `run`, `agent run`, `mission plan/run`,
+`providers models`, or `providers test` invocation. `N` must be 1–10; `1` disables retries.
 
 By default, every successful `run` turn is also saved as a local conversation transcript. The
 session ID appears in the stderr summary and in JSON output as `session_id`:
@@ -234,8 +240,9 @@ stoic-codex providers add ./lab.json         # validate, then install to ~/.stoi
 stoic-codex providers show gemini            # request shape; no network call
 stoic-codex providers models gemini           # live GET /v1beta/models; no completion
 stoic-codex providers models openrouter --free # only explicit `:free` / zero-price models
+stoic-codex providers models groq --max-attempts 1 # bounded, read-only catalogue retries
 stoic-codex providers show lab --model m1     # ...for a provider you wrote yourself
-stoic-codex providers test lab --model m1     # completion request; use only on a free/local endpoint
+stoic-codex providers test lab --model m1 --max-attempts 1 # completion request; use only on free/local
 ```
 
 `providers show` renders the credential as `<credential>` and never opens a socket. `providers

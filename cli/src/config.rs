@@ -179,6 +179,11 @@ impl Config {
         if self.memory.context_budget < 100 {
             return Err("memory.context_budget must be at least 100 characters".into());
         }
+        if let Some(attempts) = self.providers.max_attempts {
+            if !(1..=10).contains(&attempts) {
+                return Err("providers.max_attempts must be between 1 and 10".into());
+            }
+        }
         Ok(())
     }
 }
@@ -212,6 +217,16 @@ mod tests {
         let cfg = Config::load(&path).unwrap();
         assert_eq!(cfg.memory.context_budget, 400);
         assert_eq!(cfg.memory.daemon_address, "127.0.0.1:1729");
+    }
+
+    #[test]
+    fn max_attempts_must_be_between_one_and_ten() {
+        for attempts in [0, 11] {
+            let mut cfg = Config::default();
+            cfg.providers.max_attempts = Some(attempts);
+            let error = cfg.validate().unwrap_err();
+            assert!(error.contains("providers.max_attempts"), "{error}");
+        }
     }
 
     #[test]

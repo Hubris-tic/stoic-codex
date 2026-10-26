@@ -67,9 +67,10 @@ pub fn turn(
     let task = parsed.rest().join(" ").trim().to_string();
     if task.is_empty() {
         return Err(CmdError::usage(
-            "usage: stoic-codex run <task…> [--provider ID] [--model NAME] [--continue | --resume ID] [--no-session] [--no-stream] [--dry-run]",
+            "usage: stoic-codex run <task…> [--provider ID] [--model NAME] [--max-attempts N] [--continue | --resume ID] [--no-session] [--no-stream] [--dry-run]",
         ));
     }
+    let policy = retry_policy_for(parsed, cfg)?;
 
     let no_memory = parsed.switch("no-memory");
     let no_remember = parsed.switch("no-remember");
@@ -85,10 +86,14 @@ pub fn turn(
         None
     };
     if continue_session && resume_id.is_some() {
-        return Err(CmdError::usage("choose either --continue or --resume <session-id>"));
+        return Err(CmdError::usage(
+            "choose either --continue or --resume <session-id>",
+        ));
     }
     if no_session && (continue_session || resume_id.is_some()) {
-        return Err(CmdError::usage("--no-session cannot be combined with --continue or --resume"));
+        return Err(CmdError::usage(
+            "--no-session cannot be combined with --continue or --resume",
+        ));
     }
 
     let mut session = if continue_session {
@@ -278,7 +283,6 @@ pub fn turn(
     // ── send ────────────────────────────────────────────────────────────────────────
     let started = Instant::now();
     // Retries are a transport concern, so the adapter never learns they happened.
-    let policy = retry_policy(cfg);
     let outcome = if stream {
         exchange_streaming(
             transport,
@@ -523,27 +527,19 @@ fn exchange_streaming(
             }
             for frame in sse.push(chunk) {
                 match decoder.push_frame(&frame) {
-                    Ok(events) => {
-                        for event in events {
-                            match event {
-                                CanonicalEvent::TextDelta { text: t } => {
-                                    text.push_str(&t);
-                                    if !json {
-                                        let _ = write!(out, "{t}");
-                                        let _ = out.flush();
-                                    }
-                                }
-                                CanonicalEvent::Usage { usage: u } => usage.merge_max(&u),
-                                CanonicalEvent::Stop { reason } => stop = reason,
-                                CanonicalEvent::Error { kind, message } => {
-                                    first_error =
-                                        Some(format!("provider reported {kind}: {message}"))
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
+                    Ok(events) => apply_stream_events(
+                        events,
+                        &mut text,
+                        &mut usage,
+                        &mut stop,
+                        &mut first_error,
+                        out,
+                        json,
+                    ),
                     Err(e) => first_error = Some(e.to_string()),
+                }
+                if first_error.is_some() {
+                    break;
                 }
             }
         };
@@ -568,6 +564,39 @@ fn exchange_streaming(
             &error_body
         };
         return Err(error_for_status(adapter, response.status, detail));
+    }
+    // A well-formed SSE event is normally terminated by a blank line, but some providers
+    // close immediately after the last data line. Flush that trailing frame before sealing
+    // the adapter so late usage (notably OpenAI's final usage chunk) is not lost.
+    if response.is_event_stream() && first_error.is_none() {
+        if let Some(frame) = sse.finish() {
+            match decoder.push_frame(&frame) {
+                Ok(events) => apply_stream_events(
+                    events,
+                    &mut text,
+                    &mut usage,
+                    &mut stop,
+                    &mut first_error,
+                    &mut ctx.out,
+                    json,
+                ),
+                Err(e) => first_error = Some(e.to_string()),
+            }
+        }
+        if first_error.is_none() {
+            match decoder.finish() {
+                Ok(events) => apply_stream_events(
+                    events,
+                    &mut text,
+                    &mut usage,
+                    &mut stop,
+                    &mut first_error,
+                    &mut ctx.out,
+                    json,
+                ),
+                Err(e) => first_error = Some(e.to_string()),
+            }
+        }
     }
     if let Some(e) = first_error {
         return Err(CmdError::failed(e));
@@ -602,14 +631,6 @@ fn exchange_streaming(
         });
     }
 
-    for event in decoder
-        .finish()
-        .map_err(|e| CmdError::failed(e.to_string()))?
-    {
-        if let CanonicalEvent::Usage { usage: u } = event {
-            usage.merge_max(&u);
-        }
-    }
     Ok(Outcome {
         text,
         usage,
@@ -619,6 +640,37 @@ fn exchange_streaming(
         model: request.model.clone(),
         provider: adapter.id().to_string(),
     })
+}
+
+fn apply_stream_events<W: Write>(
+    events: Vec<CanonicalEvent>,
+    text: &mut String,
+    usage: &mut Usage,
+    stop: &mut StopReason,
+    first_error: &mut Option<String>,
+    out: &mut W,
+    json: bool,
+) {
+    for event in events {
+        if first_error.is_some() {
+            break;
+        }
+        match event {
+            CanonicalEvent::TextDelta { text: delta } => {
+                text.push_str(&delta);
+                if !json {
+                    let _ = write!(out, "{delta}");
+                    let _ = out.flush();
+                }
+            }
+            CanonicalEvent::Usage { usage: update } => usage.merge_max(&update),
+            CanonicalEvent::Stop { reason } => *stop = reason,
+            CanonicalEvent::Error { kind, message } => {
+                *first_error = Some(format!("provider reported {kind}: {message}"));
+            }
+            _ => {}
+        }
+    }
 }
 
 fn exchange_once(
@@ -805,6 +857,34 @@ pub fn retry_policy(cfg: &Config) -> RetryPolicy {
     RetryPolicy::standard().with_attempts(attempts)
 }
 
+/// Build the policy for a single command, applying its optional fail-fast override.
+pub fn retry_policy_for(parsed: &Parsed, cfg: &Config) -> Result<RetryPolicy, CmdError> {
+    let attempts = parsed_max_attempts(parsed)?
+        .unwrap_or_else(|| cfg.providers.max_attempts.unwrap_or(4).clamp(1, 10));
+    Ok(RetryPolicy::standard().with_attempts(attempts))
+}
+
+/// Apply a CLI retry override to a config clone used by agent and mission model clients.
+pub fn apply_retry_override(parsed: &Parsed, cfg: &mut Config) -> Result<(), CmdError> {
+    if let Some(attempts) = parsed_max_attempts(parsed)? {
+        cfg.providers.max_attempts = Some(attempts);
+    }
+    Ok(())
+}
+
+fn parsed_max_attempts(parsed: &Parsed) -> Result<Option<u32>, CmdError> {
+    if !parsed.has("max-attempts") {
+        return Ok(None);
+    }
+    let invalid = || CmdError::usage("--max-attempts must be an integer from 1 to 10");
+    let raw = parsed.value("max-attempts").ok_or_else(invalid)?;
+    let attempts = raw.parse::<u32>().map_err(|_| invalid())?;
+    if !(1..=10).contains(&attempts) {
+        return Err(invalid());
+    }
+    Ok(Some(attempts))
+}
+
 /// Dim text for notices that are not the answer.
 fn dim(s: &str) -> String {
     format!("\u{1b}[2m{s}\u{1b}[0m")
@@ -822,6 +902,49 @@ fn truncate(s: &str, n: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parsed(words: &[&str]) -> Parsed {
+        crate::args::parse(
+            &words
+                .iter()
+                .map(|word| word.to_string())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn command_retry_limit_overrides_the_config_and_propagates_to_clients() {
+        let mut cfg = Config::default();
+        cfg.providers.max_attempts = Some(7);
+        assert_eq!(
+            retry_policy_for(&parsed(&["run", "task"]), &cfg)
+                .unwrap()
+                .attempts,
+            7
+        );
+
+        let args = parsed(&["run", "task", "--max-attempts", "2"]);
+        assert_eq!(retry_policy_for(&args, &cfg).unwrap().attempts, 2);
+        apply_retry_override(&args, &mut cfg).unwrap();
+        assert_eq!(cfg.providers.max_attempts, Some(2));
+        assert_eq!(retry_policy(&cfg).attempts, 2);
+    }
+
+    #[test]
+    fn command_retry_limit_rejects_missing_invalid_and_out_of_range_values() {
+        let cfg = Config::default();
+        for args in [
+            parsed(&["run", "task", "--max-attempts"]),
+            parsed(&["run", "task", "--max-attempts", "0"]),
+            parsed(&["run", "task", "--max-attempts", "11"]),
+            parsed(&["run", "task", "--max-attempts", "many"]),
+        ] {
+            let error = retry_policy_for(&args, &cfg).unwrap_err().to_string();
+            assert!(error.contains("--max-attempts"), "{error}");
+            assert!(error.contains("1 to 10"), "{error}");
+        }
+    }
 
     #[test]
     fn provider_cost_is_labelled_as_a_rate_card_estimate() {

@@ -13,7 +13,9 @@ use stoic_codex_providers::{
     adapter_for, AuthSpec, CanonicalRequest, CanonicalResponse, SseDecoder, WireAdapter,
 };
 
-use crate::cmd::run::{reroute, resolve_adapter, resolve_credential, to_http_request};
+use crate::cmd::run::{
+    reroute, resolve_adapter, resolve_credential, retry_policy, to_http_request,
+};
 use crate::config::Config;
 use crate::net::{HttpRequest, LiveTransport};
 use crate::paths::Paths;
@@ -26,6 +28,7 @@ pub struct RemoteModel {
     auth: AuthSpec,
     base_url: Option<String>,
     model_override: Option<String>,
+    retry_policy: crate::retry::RetryPolicy,
 }
 
 impl RemoteModel {
@@ -55,6 +58,7 @@ impl RemoteModel {
             auth: probe.auth,
             base_url: cfg.providers.base_url.clone(),
             model_override: model_override.map(|m| m.to_string()),
+            retry_policy: retry_policy(cfg),
         })
     }
 
@@ -94,12 +98,12 @@ impl RemoteModel {
 impl Model for RemoteModel {
     fn complete(&self, request: &CanonicalRequest) -> Result<CanonicalResponse, ModelError> {
         let http = self.http(request)?;
-        // The agent's model handle has no config of its own; the standard policy is the same
-        // one `run` uses by default, so a mission and a single turn retry alike.
+        // Store the config-backed policy on the handle so agents and missions honor the
+        // same retry limit as a single turn, including a per-command override.
         let (response, body) = crate::retry::buffered(
             &self.transport,
             &http,
-            &crate::retry::RetryPolicy::standard(),
+            &self.retry_policy,
             &mut |_| {},
             &mut crate::retry::real_sleep,
         )
@@ -122,30 +126,35 @@ impl Model for RemoteModel {
             let mut sse = SseDecoder::new();
             let mut text = String::new();
             let mut usage = stoic_codex_providers::Usage::default();
-            for frame in sse.push(&body) {
-                for event in decoder
-                    .push_frame(&frame)
-                    .map_err(|e| ModelError::Decode(e.to_string()))?
-                {
+            let mut collect = |events: Vec<stoic_codex_providers::CanonicalEvent>| {
+                for event in events {
                     match event {
-                        stoic_codex_providers::CanonicalEvent::TextDelta { text: t } => {
-                            text.push_str(&t)
+                        stoic_codex_providers::CanonicalEvent::TextDelta { text: delta } => {
+                            text.push_str(&delta)
                         }
-                        stoic_codex_providers::CanonicalEvent::Usage { usage: u } => {
-                            usage.merge_max(&u)
+                        stoic_codex_providers::CanonicalEvent::Usage { usage: update } => {
+                            usage.merge_max(&update)
                         }
                         _ => {}
                     }
                 }
+            };
+            for frame in sse.push(&body) {
+                let events = decoder
+                    .push_frame(&frame)
+                    .map_err(|e| ModelError::Decode(e.to_string()))?;
+                collect(events);
             }
-            for event in decoder
+            if let Some(frame) = sse.finish() {
+                let events = decoder
+                    .push_frame(&frame)
+                    .map_err(|e| ModelError::Decode(e.to_string()))?;
+                collect(events);
+            }
+            let events = decoder
                 .finish()
-                .map_err(|e| ModelError::Decode(e.to_string()))?
-            {
-                if let stoic_codex_providers::CanonicalEvent::Usage { usage: u } = event {
-                    usage.merge_max(&u);
-                }
-            }
+                .map_err(|e| ModelError::Decode(e.to_string()))?;
+            collect(events);
             if text.trim().is_empty() {
                 return Err(ModelError::Decode(
                     "the server streamed a reply to a non-streaming request and it carried no \

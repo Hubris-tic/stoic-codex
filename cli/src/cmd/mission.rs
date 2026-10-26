@@ -40,8 +40,9 @@ struct Resolved {
 }
 
 fn resolve(parsed: &Parsed, paths: &Paths) -> Result<(Config, Resolved), CmdError> {
-    let cfg = Config::load_for(paths).map_err(CmdError::failed)?;
+    let mut cfg = Config::load_for(paths).map_err(CmdError::failed)?;
     cfg.validate().map_err(CmdError::failed)?;
+    crate::cmd::run::apply_retry_override(parsed, &mut cfg)?;
 
     let provider = parsed
         .value("provider")
@@ -115,7 +116,7 @@ fn plan_only(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         .to_string();
     if task.is_empty() {
         return Err(CmdError::usage(
-            "usage: stoic-codex mission plan <task…> [--agents 3] [--repo DIR]",
+            "usage: stoic-codex mission plan <task…> [--agents 3] [--repo DIR] [--max-attempts N]",
         ));
     }
     let (cfg, resolved) = resolve(parsed, paths)?;
@@ -125,7 +126,8 @@ fn plan_only(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
 
     let strategos = RemoteModel::new(&resolved.provider, paths, &cfg, Some(&resolved.model))
         .map_err(CmdError::failed)?;
-    let mut request = stoic_codex_agent::strategos::strategos_plan_prompt(&task, &layout, &codenames);
+    let mut request =
+        stoic_codex_agent::strategos::strategos_plan_prompt(&task, &layout, &codenames);
     request.model = resolved.model.clone();
     request.max_tokens = cfg.providers.max_tokens;
 
@@ -202,7 +204,7 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         return Err(CmdError::usage(
             "usage: stoic-codex mission run <task…> [--agents 3] [--repo DIR] [--base REF]\n\
              \x20      [--verify \"cargo test\"] [--no-review] [--no-commit] [--keep-worktrees]\n\
-             \x20      [--keep-branches] [--parallel N] [--provider ID] [--model M] [--json]",
+             \x20      [--keep-branches] [--parallel N] [--provider ID] [--model M] [--max-attempts N] [--json]",
         ));
     }
     let (cfg, resolved) = resolve(parsed, paths)?;
@@ -512,7 +514,11 @@ mod tests {
         Plan {
             assignments: vec![
                 stoic_codex_agent::Assignment::with_code("x1-write", "x1-write", "add the parser"),
-                stoic_codex_agent::Assignment::with_code("x2-check", "x2-check", "add tests for it"),
+                stoic_codex_agent::Assignment::with_code(
+                    "x2-check",
+                    "x2-check",
+                    "add tests for it",
+                ),
             ],
             source: PlanSource::Strategos,
             raw: String::new(),
