@@ -276,14 +276,16 @@ work in the workspace sync.
       `970111f6cb62cc02fe36a82ea7d71b37a2889c97` to feature commit
       `8edeba9bee576ee6256cb9adbc9f1f1d8b85dc18`; no force push or merge commit. This checklist
       update is being kept on both `main` and the feature branch.
-- [x] **Mission and memory reliability follow-up (2026-10-26):** closed the dangling-symlink
-      write escape; made mission results distinguish complete/partial/failed; preserved provider-
-      failure edits on recovery branches; surfaced cleanup issues; tested real-Git cleanup and
-      parallel overlap. Prompt memory now obeys character and calibrated-token caps, reports actual
-      usage, and escapes untrusted line/markup injection; run/context and zero-budget cases are
-      covered. All seven local crates build cleanly and pass **575 tests, 0 failed** (4 live/network
-      tests skipped); optional TypeDB feature builds with 93 unit tests but its daemon tests were
-      not live. `git diff --check` and targeted rustfmt pass; the upstream-fork patch is unverified.
+- [x] **Mission and memory reliability follow-up (2026-10-26):** commit
+      `06a57fa6de357b26d765d856ed6985f497f83323` was fast-forwarded to both retained refs (`main`
+      and `agent/zenithal-workspace-sync-2026-10-26`). Closed the dangling-symlink write escape;
+      made mission results distinguish complete/partial/failed; preserved provider-failure edits on
+      recovery branches; surfaced cleanup issues; tested real-Git cleanup and parallel overlap.
+      Prompt memory now obeys character and calibrated-token caps, reports actual usage, and escapes
+      untrusted line/markup injection; run/context and zero-budget cases are covered. All seven local
+      crates build cleanly and pass **575 tests, 0 failed** (4 live/network tests skipped); optional
+      TypeDB feature builds with 93 unit tests but its daemon tests were not live. `git diff --check`
+      and targeted rustfmt pass; the upstream-fork patch is unverified.
 - [ ] Finish credential cleanup: PAT #1's local copy was revoked (HTTP 202) and removed; PAT #2
       was unavailable locally and still needs manual revocation. The later pasted PAT's revocation
       request returned HTTP 422, so it must also be revoked in GitHub settings; its local copies
