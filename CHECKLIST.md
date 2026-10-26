@@ -2,8 +2,10 @@
 
 Status as of **2026-10-26**. Everything ticked in §A was re-verified in the preceding validation
 round; everything unticked is either unverified, unscheduled, or blocked on something named in
-the line. The current container has no `cargo` or `rustc`, so new Rust changes cannot be compiled
-here until that toolchain is available.
+the line. Stable Rust 1.99.1 is available under `/var/tmp` for isolated TUI work: the latest TUI
+crate run passed 69 tests and its snapshots/previews were regenerated. This ephemeral toolchain
+may need reinstalling after an environment reset; the CLI/session and full-workspace changes still
+need their own compile/test pass.
 
 Legend: `[ ]` open · `[x]` done and verified · **S/M/L** = rough size · `live` = verified against
 a real service, not a stub.
@@ -78,9 +80,9 @@ just because its model is listed here.
       `cli/src/transcript.rs` and wired into `run`: owner-only local JSON transcripts, canonical
       user/assistant history, automatic session IDs, `--continue` / `--resume <id>` / `--no-session`,
       and oldest-complete-turn eviction from the *request copy* using the calibrated token budget.
-      Unit and loopback e2e tests are added, but this remains **unverified**: `cargo`/`rustc` are
-      absent in the current environment, so compile/test validation must be rerun when the Rust
-      toolchain is available. **L**
+      Unit and loopback e2e tests are added, but this remains **unverified**: only the isolated TUI
+      crate has been compiled and tested in the latest round; this CLI/session path still needs its
+      own Rust test run before it can be marked done. **L**
 - [ ] **`stoic-codex stream` / a transcript renderer** — markdown, tool calls as they happen, diffs
       inline, rather than one line of progress per tool. **M**
 - [ ] **Budget guard before sending**: wired into transcript context fitting using provider/model
@@ -111,16 +113,16 @@ just because its model is listed here.
       hand in the snapshot; it should read `git diff` from the selected worktree. **M**
 - [ ] **Memory graph from a live TypeDB store**, not a fixture, with the recall path that fed the
       prompt highlighted. **M**
-- [ ] **Regenerate previews after any layout change** —
-      `cd tui && cargo run -q --example snapshot && cargo run -q --example frames \
-      && python3 render_preview.py && python3 render_preview.py --gif`. Previews are part of the
-      docs, so a stale one is a wrong claim. The Stoic Codex header, underline, and mission branch
-      labels were patched into the cell grids and re-rasterized, but the Rust snapshot example
-      could not run here; regenerate from the compiled views when tooling is available. **S**
-- [ ] **40-column terminal and preview.** A full-width unified diff now replaces the cramped
-      side-by-side view below 72 columns; welcome/mission/help 40-column snapshots were added to
-      the snapshot example. Rust snapshots have not been regenerated because `cargo` is absent;
-      inspect and tune them when the toolchain is available. **S**
+- [x] **Regenerate previews after any layout change** —
+      `cd tui && cargo run --example snapshot && cargo run --example frames && python3 render_preview.py
+      && python3 render_preview.py --gif`. This round regenerated 12 cell-grid snapshots and 12
+      PNGs, plus 48 animation-frame JSON files and `hole.gif`; GIF dimensions/frame count and
+      sampled-frame differences were verified. All static wide, narrow, and 40-column previews
+      were visually inspected. Repeat after future layout edits. **S**
+- [x] **40-column terminal and preview.** A unified diff replaces the cramped side-by-side view
+      below 72 columns; 40-column welcome, mission, help, and diff snapshots are regenerated and
+      visually inspected. The contextual help sheet fills the narrow width to avoid leaking a
+      strip of the underlying diff at its edges; a regression test covers that case. **S**
 - [ ] **Wire the contextual key guide.** The welcome and per-view help-sheet renderers are now
       present, and footers preserve a compact `? help` affordance. The app shell still needs to
       dispatch `?`/Escape to show/dismiss the overlay. **S**
@@ -203,7 +205,10 @@ just because its model is listed here.
       an invoice. No paid-provider calls.
 - [ ] Search for obsolete pre-fork product terms; keep upstream identifiers only where
       `NAMING.md` documents them.
-- [ ] Preview PNG/GIF regenerated from the shipped views in the same commit as the layout change.
+- [x] Static wide/narrow/40-column PNG previews regenerated from shipped views and committed with
+      the layout update. `hole.gif` was regenerated from 48 fresh frame dumps and verified (48
+      frames, 788×428, 120 ms/frame); its animation source was unchanged. All static screens were
+      inspected.
 - [ ] Keys and PATs revoked; the leak checklist in §0 ticked.
 
 ---
@@ -216,8 +221,10 @@ identifiers and include the pre-existing transcript/context-budget work in the w
 
 - [x] Static review of the source rebrand, `.zenithal` config migration, and `ZENITHAL_*`
       compatibility aliases; historical TypeDB database ID preserved.
-- [ ] Compile and test the Rust changes. **Not verified**: this environment has no `cargo` or
-      `rustc`; no Rust test result is claimed for the rename/session or new TUI polish changes.
+- [ ] Compile and test the Rust changes. **Partially verified**: the isolated TUI crate, including
+      the cosmetic pass, compiles and passes 69 tests with stable Rust 1.99.1. The broader
+      CLI/session, provider/memory, and upstream-fork workspace changes were not covered by this
+      run; rerun their build/tests before release.
 - [x] Transferred the workspace, scanned the staged diff and secrets, and pushed implementation
       commit `5a7bb0d17e31c17f8b6636675876cc990c10af26` plus checklist follow-up
       `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3` to the selected feature branch only. No `main`
@@ -229,6 +236,10 @@ identifiers and include the pre-existing transcript/context-budget work in the w
       `agent/zenithal-workspace-sync-2026-10-26`. The public ref listing found 4,709 branches;
       4,707 were deleted. A fresh `git ls-remote --heads` verified that exactly the two requested
       branches remain, with `main` unchanged.
+- [x] **TUI cosmetic follow-up (requested priority):** welcome screen, contextual help-sheet views,
+      compact `? help` footer, and 40-column unified diff; 69 TUI tests pass and all previews were
+      regenerated and inspected. Pushed only to the feature branch; app-shell `?`/Escape dispatch
+      remains open.
 - [ ] Finish credential cleanup: PAT #1's local copy was revoked (HTTP 202) and removed; PAT #2
       was unavailable locally and still needs manual revocation. The later pasted PAT's revocation
       request returned HTTP 422, so it must also be revoked in GitHub settings; its local copies
@@ -238,8 +249,9 @@ identifiers and include the pre-existing transcript/context-budget work in the w
 
 ## A. Verified in the preceding validation round — with the evidence, so it does not get re-litigated
 
-The suite counts below predate the new local transcript implementation and tests. They are
-historical verified results, not validation of the current working-tree changes.
+The broad suite counts below predate the new local transcript implementation and tests, and remain
+historical for the rest of the workspace. The isolated TUI crate has since passed 69 tests
+(2026-10-26); that does not validate the transcript/session changes or the full workspace.
 
 | Item | Evidence |
 |---|---|

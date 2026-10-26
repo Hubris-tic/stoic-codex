@@ -1,34 +1,34 @@
 ◍ Stoic Codex  │   mission ▸ diff   memory   hole                                                                  on main   +7   -3
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- FILES                      │ src/auth.rs  +7 -3   [1/1]                                                                            
-▏ src/auth.rs      +7 -3    │  41  pub fn verify(token: &str) -> bool {         │   41  pub fn verify(token: &str) -> bool {        
-                            │  42 -    let hash = sha256(token);                │   42 +    let hash = argon2::hash(token)?;        
-                            │  43 -    hash == stored                           │   43 +    argon2::verify(&hash, stored)           
-                            │                                                   │   44 +        .map_err(|e| Error::Crypto(e))?     
-                            │  44  }                                            │   44  }                                           
-                            │  45                                               │   45                                              
-                            │  46  fn rotate_key() {                            │   46  fn rotate_key() {                           
-                            │  47 -    sleep(Duration::from_secs(1));           │   48 +    let Some(next) = next_key() else {      
-                            │                                                   │   49 +        return Err(Error::Exhausted);       
-                            │                                                   │   50 +    };                                      
-                            │                                                   │   51 +    schedule_rotation(next);                
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
-                            │                                                                                                       
+ FILES                      │ src/auth.rs  +7 -3  [1/1]
+▏ src/auth.rs      +7 -3    │  41  pub fn verify(token: &str) -> bool {         │   41  pub fn verify(token: &str) -> bool {
+                            │  42 -    let hash = sha256(token);                │   42 +    let hash = argon2::hash(token)?;
+                            │  43 -    hash == stored                           │   43 +    argon2::verify(&hash, stored)
+                            │                                                   │   44 +        .map_err(|e| Error::Crypto(e))?
+                            │  44  }                                            │   44  }
+                            │  45                                               │   45
+                            │  46  fn rotate_key() {                            │   46  fn rotate_key() {
+                            │  47 -    sleep(Duration::from_secs(1));           │   48 +    let Some(next) = next_key() else {
+                            │                                                   │   49 +        return Err(Error::Exhausted);
+                            │                                                   │   50 +    };
+                            │                                                   │   51 +    schedule_rotation(next);
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- 1 file(s) changed  3 context                                                           n/N file · j/k scroll · space fold · q quit 
+ 1 file(s) changed  3 context                                                          n/N files · j/k scroll · space fold · ? help

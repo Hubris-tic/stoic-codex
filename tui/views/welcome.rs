@@ -46,7 +46,11 @@ pub fn render(frame: &mut Frame, area: Rect, info: &WelcomeInfo) {
     let mut lines = vec![
         blackhole::sigil(),
         Line::from(""),
-        centered("STOIC CODEX", width, t::title().add_modifier(Modifier::BOLD)),
+        centered(
+            "STOIC CODEX",
+            width,
+            t::title().add_modifier(Modifier::BOLD),
+        ),
         centered(
             if compact {
                 "Local-first · BYOK"
@@ -89,7 +93,9 @@ pub fn render(frame: &mut Frame, area: Rect, info: &WelcomeInfo) {
         details.push(("workspace".into(), workspace.clone()));
     }
     match (&info.provider, &info.model) {
-        (Some(provider), Some(model)) => details.push(("model".into(), format!("{provider} · {model}"))),
+        (Some(provider), Some(model)) => {
+            details.push(("model".into(), format!("{provider} · {model}")))
+        }
         (Some(provider), None) => details.push(("provider".into(), provider.clone())),
         (None, Some(model)) => details.push(("model".into(), model.clone())),
         (None, None) => {}
@@ -120,10 +126,7 @@ pub fn render(frame: &mut Frame, area: Rect, info: &WelcomeInfo) {
         height: content_height,
         ..area
     };
-    frame.render_widget(
-        Paragraph::new(visible).alignment(Alignment::Center),
-        target,
-    );
+    frame.render_widget(Paragraph::new(visible).alignment(Alignment::Center), target);
 }
 
 /// Whole-screen version used by the first-run route and the snapshot generator.

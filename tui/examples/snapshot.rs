@@ -76,8 +76,15 @@ fn snapshot_at(name: &str, w: u16, h: u16, draw: impl FnOnce(&mut Frame)) {
         rows.push(row);
     }
 
+    // The JSON keeps every terminal cell; trim padding only from the human-readable dump.
     let plain: Vec<String> = (0..h)
-        .map(|y| (0..w).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .map(|y| {
+            (0..w)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
         .collect();
 
     let json = format!(

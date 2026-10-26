@@ -76,7 +76,7 @@ fn bindings(context: HelpContext) -> &'static [(&'static str, &'static str)] {
 /// narrow terminal by fitting descriptions rather than wrapping the key column.
 pub fn render(frame: &mut Frame, area: Rect, context: HelpContext) {
     let entries = bindings(context);
-    let panel_width = area.width.min(76).saturating_sub(2);
+    let panel_width = area.width.min(76);
     let desired_height = (entries.len() as u16).saturating_add(5);
     let panel_height = area.height.saturating_sub(2).min(desired_height);
     if panel_width < 28 || panel_height < 7 {
@@ -156,12 +156,40 @@ mod tests {
     #[test]
     fn mission_sheet_explains_the_contextual_keys_without_a_box() {
         let mut terminal = Terminal::new(TestBackend::new(40, 18)).unwrap();
-        terminal.draw(|frame| render(frame, frame.area(), HelpContext::Mission)).unwrap();
+        terminal
+            .draw(|frame| render(frame, frame.area(), HelpContext::Mission))
+            .unwrap();
         let text = screen(&terminal);
         assert!(text.contains("KEY GUIDE"), "{text}");
         assert!(text.contains("MISSION"), "{text}");
         assert!(text.contains("Select an operator"), "{text}");
         assert!(text.contains("? / Esc close"), "{text}");
+    }
+
+    #[test]
+    fn narrow_help_sheet_covers_the_underlying_view_edge_to_edge() {
+        let mut terminal = Terminal::new(TestBackend::new(40, 18)).unwrap();
+        terminal
+            .draw(|frame| {
+                let area = frame.area();
+                frame.render_widget(
+                    Paragraph::new("~".repeat(area.width as usize)),
+                    Rect {
+                        x: area.x,
+                        y: area.y + 8,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+                render(frame, area, HelpContext::Mission);
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let mut row = buffer.content().iter().skip(8 * 40).take(40);
+        assert!(
+            row.all(|cell| cell.symbol() != "~"),
+            "underlying content leaked at the edge of a compact help sheet"
+        );
     }
 
     #[test]
@@ -171,7 +199,10 @@ mod tests {
             terminal
                 .draw(|frame| render(frame, frame.area(), HelpContext::Diff))
                 .unwrap();
-            assert!(screen(&terminal).contains("KEY GUIDE"), "missing sheet at {width}x{height}");
+            assert!(
+                screen(&terminal).contains("KEY GUIDE"),
+                "missing sheet at {width}x{height}"
+            );
         }
     }
 }

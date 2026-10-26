@@ -346,6 +346,10 @@ mod tests {
         diff::parse("diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -1,2 +1,2 @@\n keep\n-old\n+new\n").unwrap()
     }
 
+    fn text_of(line: &Line) -> String {
+        line.spans.iter().map(|span| span.content.as_ref()).collect()
+    }
+
     #[test]
     fn navigation_wraps_both_directions() {
         let files = two_line_diff();

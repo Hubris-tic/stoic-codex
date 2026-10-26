@@ -404,6 +404,17 @@ zero.
 - Diff review now uses a stacked unified layout below 72 columns in the diff pane. It shows context
   once, expands paired old/new lines into two readable rows, keeps line numbers where possible,
   and retains the subtle removed-line tint. Wide panes remain side-by-side.
-- Added tests plus 40-column welcome, mission, help, and diff snapshot cases. The snapshot example
-  and Rust tests could not run here because `cargo`/`rustc` are unavailable; the generated previews
-  have not yet been refreshed and this code is not claimed as compiled.
+- Added tests plus 40-column welcome, mission, contextual-help, and diff snapshot cases. The
+  narrow help sheet now fills a 40-column terminal so no strip of the underlying diff leaks around
+  the overlay; a regression test protects that behavior.
+- Installed stable Rust 1.99.1 in the ephemeral `/var/tmp` toolchain and ran
+  `cargo test --manifest-path tui/Cargo.toml`: **69 passed, 0 failed**. Targeted `rustfmt --check`
+  passes for the new `help.rs` and `welcome.rs`; the full crate `cargo fmt --check` still reports
+  formatting differences across existing files, so no broad unrelated reformat was applied.
+- `cargo run --example snapshot` generated 12 cell-grid JSON previews; `cargo run --example frames`
+  generated 48 fresh animation-frame JSON files. The renderer produced all 12 PNGs and a 48-frame
+  `hole.gif` (788×428, 120 ms/frame); GIF metadata and sampled-frame differences were checked, and
+  every static wide/narrow/40-column PNG was visually inspected.
+- The help renderer remains presentation-only: app-shell dispatch for `?` and Escape is still
+  unimplemented. This run does not validate the broader CLI/session changes or the full upstream
+  workspace.

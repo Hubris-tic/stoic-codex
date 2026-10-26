@@ -1,22 +1,22 @@
 ◍ Stoic Codex  │ ▸ mission   diff   memory   hole      on main   ● 1 running   $1.20
 ────────────────────────────────────────────────────────────────────────────────────
-    CODE          BRANCH               CONTEXT    RESULT     ASSIGNMENT             
+    CODE          BRANCH               CONTEXT    RESULT     ASSIGNMENT
 ▏ ✓ Strategos     —                    ▰▰▰▰▰▰▰▰▰▰ done       replace sha256 with ar…
   ──────────────────────────────────────────────────────────────────────────────────
   ✗ x5-patch      stoic-codex/x5-patch ▰▰▰▱▱▱▱▱▱▱ rejected   rewrite the error mapp…
   ⠋ x7-trace      stoic-codex/x7-trace ▰▰▰▰▰▰▱▱▱▱ running    rotate the signing key…
   ✓ x1-write      stoic-codex/x1-write ▰▰▰▰▰▰▰▰▰▰ accepted   hash and verify with a…
 ────────────────────────────────────────────────────────────────────────────────────
- ACTIVITY                                                                           
- 00:14 · x7-trace    search "sleep(Duration" src/                                   
- 00:19 ╵ x7-trace    ok search (6ms) 2 matches in src/keys.rs                       
- 00:23 · x5-patch    write_file src/error.rs                                        
- 00:26 ! x5-patch    src/error.rs also written by x1-write; x1-write wins           
- 00:31 · x7-trace    edit_file src/keys.rs                                          
- 00:38 ✓             Strategos reviewing 3 reports                                  
- 00:44 ✓ x1-write    accepted — the diff is exactly the assigned change             
- 00:45 ✓ x5-patch    rejected — src/error.rs is owned by x1-write                   
- 01:01 · x7-trace    run_command cargo test auth::                                  
- 01:04 ●             1 file applied, 1 conflict reported                            
+ ACTIVITY
+ 00:14 · x7-trace    search "sleep(Duration" src/
+ 00:19 ╵ x7-trace    ok search (6ms) 2 matches in src/keys.rs
+ 00:23 · x5-patch    write_file src/error.rs
+ 00:26 ! x5-patch    src/error.rs also written by x1-write; x1-write wins
+ 00:31 · x7-trace    edit_file src/keys.rs
+ 00:38 ✓             Strategos reviewing 3 reports
+ 00:44 ✓ x1-write    accepted — the diff is exactly the assigned change
+ 00:45 ✓ x5-patch    rejected — src/error.rs is owned by x1-write
+ 01:01 · x7-trace    run_command cargo test auth::
+ 01:04 ●             1 file applied, 1 conflict reported
 ────────────────────────────────────────────────────────────────────────────────────
- ● 3 operators  1 accepted             ↑↓ select · enter detail · n/k rows · q quit 
+ ● 3 operators  1 accepted               ↑↓ select · enter detail · ? help · q quit

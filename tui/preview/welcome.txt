@@ -1,0 +1,34 @@
+◍ Stoic Codex                                                                                                           LOCAL · BYOK
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+                                                                 ⣿⠐
+
+                                                             STOIC CODEX
+                                         Local-first coding missions · bring your own models
+                                         Strategos plans · The Phalanx executes · you verify
+                                                ────────────────────────────────────
+
+                                                       Enter  begin a mission
+                                                        ?  open the key guide
+
+                                                       workspace  stoic-codex
+                                                model  google · gemini-3.1-flash-lite
+                                                        recent  refactor-auth
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ workspace stays yours                                                                                Enter start · ? help · q quit

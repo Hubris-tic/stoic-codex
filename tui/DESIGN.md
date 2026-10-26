@@ -91,8 +91,9 @@ supplies them — no pretend connection state or placeholder project.
 
 The `?` key guide is a raised-void overlay with no outline box. Each scope (welcome, mission, diff,
 memory, hole) lists only that screen's controls, with keys in primary red and explanations in grey.
-The app shell still owns input dispatch; the view and its snapshots are ready for the `?`/Escape
-handler when that shell is wired.
+At 40 columns the sheet fills the available width, so no one-cell strip of underlying content leaks
+around the modal; a regression test protects that edge case. The app shell still owns input
+dispatch; the view and its snapshots are ready for the `?`/Escape handler when that shell is wired.
 
 ## What each screen spends its red on
 
@@ -230,3 +231,10 @@ The JSON is a per-cell dump (symbol, fg, bg, bold); the rasteriser is a dumb mon
 that knows exactly one piece of typography trivia: a braille cell is eight dots, so it draws
 eight dots. If a picture is wrong, the view is wrong — which is how the memory view's
 zero-node bug was found the minute the first preview was generated.
+
+**Verified 2026-10-26:** stable Rust 1.99.1 passes all **69 TUI tests**. The snapshot example
+regenerated 12 cell-grid JSON files; the frame example regenerated 48 animation grids; the
+renderer produced 12 PNGs and a 48-frame `hole.gif` (788×428, 120 ms per frame). GIF metadata
+and sampled-frame differences were checked, and all static wide, narrow, and 40-column previews
+were visually inspected. The full workspace and CLI/session tests are outside this isolated TUI
+run.

@@ -1,0 +1,18 @@
+◍ Stoic Codex               LOCAL · BYOK
+────────────────────────────────────────
+                   ⣿⠐
+
+               STOIC CODEX
+           Local-first · BYOK
+         Plan · execute · verify
+        ────────────────────────
+
+         Enter  begin a mission
+          ?  open the key guide
+
+         workspace  stoic-codex
+  model  google · gemini-3.1-flash-lite
+          recent  refactor-auth
+
+────────────────────────────────────────
+ workspace stays yours           ? help
