@@ -19,7 +19,9 @@
 
 pub mod blackhole;
 pub mod diff_review;
+pub mod help;
 pub mod memory_graph;
 pub mod mission_board;
+pub mod welcome;
 
 pub(crate) use crate::chrome::fit;

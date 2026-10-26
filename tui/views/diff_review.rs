@@ -20,6 +20,9 @@ use super::fit;
 use crate::chrome::{self, Chrome, Segment, TAB_DIFF};
 use crate::theme as t;
 
+/// Below this width the two halves become harder to scan than a stacked unified diff.
+const UNIFIED_WIDTH: usize = 72;
+
 pub struct DiffReviewState {
     pub files: Vec<FileDiff>,
     pub file_index: usize,
@@ -117,6 +120,88 @@ fn geometry(area: Rect) -> (usize, usize, usize, usize) {
     (half, half, old_w, new_w)
 }
 
+/// One cell in the compact stacked diff. Keep line numbers when there is room, then spend
+/// the remaining width on code rather than squeezing two unreadable columns side by side.
+fn unified_line(cell: &SideCell, width: usize) -> Option<Line<'static>> {
+    if width == 0 {
+        return None;
+    }
+    match cell {
+        SideCell::Blank => None,
+        SideCell::Fold { count } => {
+            let label = if *count == 0 {
+                "  ⋯ hunk ⋯".to_string()
+            } else {
+                format!("  ⋯ {count} unchanged ⋯")
+            };
+            Some(Line::from(Span::styled(fit(&label, width), t::faint())))
+        }
+        SideCell::Line { lineno, text, kind } => {
+            let marker = match kind {
+                LineKind::Added => '+',
+                LineKind::Removed => '-',
+                LineKind::Context => ' ',
+            };
+            let number_width = if width >= 14 { 4 } else if width >= 8 { 2 } else { 0 };
+            let number = lineno.map(|n| n.to_string()).unwrap_or_default();
+            let prefix = if number_width > 0 {
+                format!("{:>width$} {} ", number, marker, width = number_width)
+            } else if width > 1 {
+                format!("{} ", marker)
+            } else {
+                marker.to_string()
+            };
+            let prefix = fit(&prefix, width);
+            let body_width = width.saturating_sub(prefix.chars().count());
+            let body = fit(text, body_width);
+            let (marker_style, body_style) = match kind {
+                LineKind::Added => (t::good(), t::good()),
+                LineKind::Removed => (t::accent(), t::accent().bg(t::RED_DEEP)),
+                LineKind::Context => (t::faint(), t::muted()),
+            };
+            // Fill removed lines with the faint red wash so the old side remains easy to
+            // track, even though the compact layout no longer has a separate left pane.
+            let body = if *kind == LineKind::Removed {
+                format!("{body:<width$}", width = body_width)
+            } else {
+                body
+            };
+            Some(Line::from(vec![
+                Span::styled(prefix, marker_style),
+                Span::styled(body, body_style),
+            ]))
+        }
+    }
+}
+
+/// Convert paired side-by-side rows into a compact unified stream. Context and fold rows are
+/// shown once; a removed/added pair becomes two lines so neither version is lost.
+fn unified_lines(rows: &[SideRow], width: usize) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    for row in rows {
+        let context_pair = matches!(
+            (&row.left, &row.right),
+            (
+                SideCell::Line { kind: LineKind::Context, .. },
+                SideCell::Line { kind: LineKind::Context, .. }
+            )
+        );
+        let fold_pair = matches!((&row.left, &row.right), (SideCell::Fold { .. }, SideCell::Fold { .. }));
+        if context_pair || fold_pair {
+            if let Some(line) = unified_line(&row.left, width) {
+                lines.push(line);
+            }
+        } else {
+            for cell in [&row.left, &row.right] {
+                if let Some(line) = unified_line(cell, width) {
+                    lines.push(line);
+                }
+            }
+        }
+    }
+    lines
+}
+
 /// The file rail: every changed file with its counts, selected one in red.
 fn render_rail(frame: &mut Frame, area: Rect, state: &DiffReviewState) {
     let mut lines: Vec<Line> = vec![
@@ -150,6 +235,9 @@ fn render_rail(frame: &mut Frame, area: Rect, state: &DiffReviewState) {
 
 /// The hunk body, without chrome.
 pub fn render(frame: &mut Frame, area: Rect, state: &DiffReviewState) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
     let Some(file) = state.current() else {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled("  no changes to review", t::faint()))),
@@ -158,17 +246,28 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DiffReviewState) {
         return;
     };
 
-    // A one-line title for the file being read, then the hunks. No border.
+    // A one-line title for the file being read, then the hunks. No border. Compact mode
+    // labels itself so a stacked diff is never mistaken for the side-by-side view.
     let (add, del) = file.counts();
+    let narrow = (area.width as usize) < UNIFIED_WIDTH;
+    let additions = format!("  +{add}");
+    let deletions = format!(" -{del}");
+    let index = format!("  [{}/{}]", state.file_index + 1, state.files.len());
+    let mode = if narrow { "  unified" } else { "" };
+    let reserved = 1
+        + additions.chars().count()
+        + deletions.chars().count()
+        + index.chars().count()
+        + mode.chars().count();
+    let max_path = if narrow { area.width as usize } else { area.width as usize / 2 };
+    let path_width = (area.width as usize).saturating_sub(reserved).min(max_path);
     let title = Line::from(vec![
         Span::styled(" ", Style::default()),
-        Span::styled(fit(file.display_path(), area.width as usize / 2), t::title()),
-        Span::styled(format!("  +{add} "), t::good()),
-        Span::styled(format!("-{del} "), t::accent()),
-        Span::styled(
-            format!("  [{}/{}]", state.file_index + 1, state.files.len()),
-            t::faint(),
-        ),
+        Span::styled(fit(file.display_path(), path_width), t::title()),
+        Span::styled(additions, t::good()),
+        Span::styled(deletions, t::accent()),
+        Span::styled(index, t::faint()),
+        Span::styled(mode, t::faint()),
     ]);
     let chunks = Layout::default()
         .direction(ratatui::layout::Direction::Vertical)
@@ -176,20 +275,27 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DiffReviewState) {
         .split(area);
     frame.render_widget(Paragraph::new(title), chunks[0]);
 
-    let (half, _half2, old_w, new_w) = geometry(chunks[1]);
     let rows = state.rows();
     let visible = chunks[1].height as usize;
-    let lines: Vec<Line> = rows
-        .iter()
-        .skip(state.scroll as usize)
-        .take(visible)
-        .map(|r| {
-            let mut l = cell_line(&r.left, half, old_w);
-            l.spans.push(Span::styled(" │ ", t::rule()));
-            l.spans.extend(cell_line(&r.right, half, new_w).spans);
-            l
-        })
-        .collect();
+    let lines: Vec<Line> = if (chunks[1].width as usize) < UNIFIED_WIDTH {
+        unified_lines(&rows, chunks[1].width as usize)
+            .into_iter()
+            .skip(state.scroll as usize)
+            .take(visible)
+            .collect()
+    } else {
+        let (half, _half2, old_w, new_w) = geometry(chunks[1]);
+        rows.iter()
+            .skip(state.scroll as usize)
+            .take(visible)
+            .map(|r| {
+                let mut l = cell_line(&r.left, half, old_w);
+                l.spans.push(Span::styled(" │ ", t::rule()));
+                l.spans.extend(cell_line(&r.right, half, new_w).spans);
+                l
+            })
+            .collect()
+    };
     frame.render_widget(Paragraph::new(lines), chunks[1]);
 }
 
@@ -226,7 +332,7 @@ pub fn render_screen(frame: &mut Frame, area: Rect, state: &DiffReviewState) {
         .status(Segment::new(format!("-{del}"), t::accent()))
         .footer(Segment::chip(format!("{} file(s) changed", state.files.len())))
         .footer(Segment::chip(format!("{} context", state.context)))
-        .hint("n/N file · j/k scroll · space fold · q quit");
+        .hint("n/N files · j/k scroll · space fold · ? help");
 
     let body = chrome::frame(frame, area, &chrome);
     render_body(frame, body, state);
@@ -265,6 +371,28 @@ mod tests {
         let rows = s.rows();
         assert!(rows.iter().any(|r| matches!(r.left, SideCell::Line { kind: LineKind::Removed, .. })));
         assert!(rows.iter().any(|r| matches!(r.right, SideCell::Line { kind: LineKind::Added, .. })));
+    }
+
+    #[test]
+    fn compact_diff_stacks_both_sides_and_keeps_every_line_inside_the_pane() {
+        let s = DiffReviewState::new(two_line_diff());
+        let lines = unified_lines(&s.rows(), 40);
+        let text: Vec<String> = lines.iter().map(text_of).collect();
+        assert!(text.iter().any(|line| line.contains("- old")), "{text:?}");
+        assert!(text.iter().any(|line| line.contains("+ new")), "{text:?}");
+        assert!(text.iter().any(|line| line.contains("keep")), "{text:?}");
+        assert!(lines.iter().all(|line| line.width() <= 40));
+    }
+
+    #[test]
+    fn a_40_column_diff_announces_its_unified_layout() {
+        let s = DiffReviewState::new(two_line_diff());
+        let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(40, 12)).unwrap();
+        terminal.draw(|f| render_screen(f, f.area(), &s)).unwrap();
+        let screen: String = terminal.backend().buffer().content().iter().map(|c| c.symbol()).collect();
+        assert!(screen.contains("unified"), "{screen}");
+        assert!(screen.contains("- old"), "{screen}");
+        assert!(screen.contains("+ new"), "{screen}");
     }
 
     #[test]

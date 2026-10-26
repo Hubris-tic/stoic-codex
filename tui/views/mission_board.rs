@@ -610,7 +610,7 @@ pub fn render_screen(frame: &mut Frame, area: Rect, state: &MissionBoardState) {
         .status(Segment::new(format!("${:.2}", s.spent_usd()), t::muted()))
         .footer(Segment::chip(format!("● {} operators", s.operators)))
         .footer(Segment::chip(format!("{} accepted", s.accepted)))
-        .hint("↑↓ select · enter detail · n/k rows · q quit");
+        .hint("↑↓ select · enter detail · ? help · q quit");
 
     let body = chrome::frame(frame, area, &chrome);
     render(frame, body, state);

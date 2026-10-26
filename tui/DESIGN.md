@@ -53,8 +53,9 @@ colour, and the ramp has its own test.
    and a data cell cannot drift. The header's tabs and the red rule under them use one
    `tab_offsets` table for the same reason.
 5. **Adapt by dropping, never by wrapping.** Below 68 columns the branch goes, below 46 the
-   meter goes; rows never wrap, and tabs are dropped from the end before the mark is. A test
-   renders every view at 24/40/60/80/100/160 columns and asserts no line exceeds its pane.
+   meter goes; rows never wrap, and tabs are dropped from the end before the mark is. The diff
+   switches from side-by-side to a full-width unified stream below 72 columns in its pane. A
+   test renders compact layouts at 24/40/60/80/100/160 columns and asserts no line exceeds its pane.
 6. **Nothing is drawn that is not data.** No fake rows, no placeholder sparklines, no "N
    items" that does not add up. A view can only show what the view-model gave it. The black
    hole is the one sanctioned exception, and it is not an exception in spirit: every cell on
@@ -78,7 +79,20 @@ Every screen shares one frame, drawn by `src/chrome.rs`:
   does not fit — never truncated into nonsense. At 40 columns you get the mark and some tabs;
   the mark is the last thing to go.
 * The footer carries state on the left (chips) and the keys that work *on this screen* on the
-  right. Hints are per-view; there is no global cheat sheet pretending to be contextual.
+  right. Hints are per-view; when the full string will not fit, a compact `? help` route wins
+  over a status chip. The key guide itself is contextual to the active view.
+
+## First contact: welcome and contextual keys
+
+The welcome view reuses the shared header/footer without inventing an active tab. Its only brand
+art is the black-hole sigil already used by the animation; the copy stays short, borderless, and
+centered. Workspace, provider/model, and recent-mission details are rendered only when the caller
+supplies them — no pretend connection state or placeholder project.
+
+The `?` key guide is a raised-void overlay with no outline box. Each scope (welcome, mission, diff,
+memory, hole) lists only that screen's controls, with keys in primary red and explanations in grey.
+The app shell still owns input dispatch; the view and its snapshots are ready for the `?`/Escape
+handler when that shell is wired.
 
 ## What each screen spends its red on
 
@@ -88,6 +102,14 @@ Every screen shares one frame, drawn by `src/chrome.rs`:
 | Diff review | removed lines (tinted `#351318`), the selected file's cursor | added lines in photon blue, context in grey, gutters faint |
 | Memory graph | the focus node | link kinds and scores in grey; photon for symbols, ember for decisions, red only for an error node |
 | Black hole | the sigil in the header, the hot inner edge of the disk | the disk ramps deep red → ember → bone by temperature; the photon ring is the only blue |
+
+## The diff at forty columns
+
+Side-by-side is the clearest comparison when both halves have room. Below 72 columns in the diff
+pane it stops being a comparison and becomes truncation, so the view switches to a unified stream:
+context appears once, paired removals/additions become two adjacent lines, line numbers stay where
+there is room, and removed code keeps the same restrained red wash. The title labels the mode so
+the change in reading direction is explicit. The 40-column snapshot is part of the example suite.
 
 ## The black hole screen
 

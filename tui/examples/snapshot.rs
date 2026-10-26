@@ -13,8 +13,8 @@ use std::fs;
 use std::path::Path;
 
 use stoic_codex_tui_views::views::{
-    blackhole::BlackHoleAnim, diff_review::DiffReviewState, memory_graph::MemoryGraphState,
-    mission_board::MissionBoardState,
+    blackhole::BlackHoleAnim, diff_review::DiffReviewState, help::HelpContext,
+    memory_graph::MemoryGraphState, mission_board::MissionBoardState, welcome::WelcomeInfo,
 };
 use stoic_codex_ui_core::{
     diff,
@@ -30,6 +30,9 @@ const H: u16 = 34;
 /// A laptop terminal with the sidebar folded away: the board must still be readable.
 const W_NARROW: u16 = 84;
 const H_NARROW: u16 = 22;
+/// A true phone-width terminal: compact layouts should remain readable at forty columns.
+const W_COMPACT: u16 = 40;
+const H_COMPACT: u16 = 18;
 
 fn colour(c: Color) -> Option<String> {
     match c {
@@ -259,10 +262,51 @@ fn memory() -> MemoryGraphState {
 }
 
 fn main() {
+    snapshot("welcome", |f| {
+        let info = WelcomeInfo {
+            workspace: Some("stoic-codex".into()),
+            provider: Some("google".into()),
+            model: Some("gemini-3.1-flash-lite".into()),
+            recent_mission: Some("refactor-auth".into()),
+        };
+        stoic_codex_tui_views::views::welcome::render_screen(f, f.area(), &info);
+    });
+
+    snapshot_at("welcome-40", W_COMPACT, H_COMPACT, |f| {
+        let info = WelcomeInfo {
+            workspace: Some("stoic-codex".into()),
+            provider: Some("google".into()),
+            model: Some("gemini-3.1-flash-lite".into()),
+            recent_mission: Some("refactor-auth".into()),
+        };
+        stoic_codex_tui_views::views::welcome::render_screen(f, f.area(), &info);
+    });
+
     snapshot("mission", |f| {
         let state = MissionBoardState::new(mission());
         let area = f.area();
         stoic_codex_tui_views::views::mission_board::render_screen(f, area, &state);
+    });
+
+    // The same board at phone width: the report pane is gone and the table keeps only the
+    // columns that matter to recognize the operator and its state.
+    snapshot_at("mission-40", W_COMPACT, H_COMPACT, |f| {
+        let state = MissionBoardState::new(mission());
+        stoic_codex_tui_views::views::mission_board::render_screen(f, f.area(), &state);
+    });
+
+    // The contextual guide is rendered above the active screen, ready for the app shell's
+    // `?`/Escape handler.
+    snapshot("help-mission", |f| {
+        let state = MissionBoardState::new(mission());
+        let area = f.area();
+        stoic_codex_tui_views::views::mission_board::render_screen(f, area, &state);
+        stoic_codex_tui_views::views::help::render(f, area, HelpContext::Mission);
+    });
+
+    snapshot_at("help-diff-40", W_COMPACT, H_COMPACT, |f| {
+        stoic_codex_tui_views::views::diff_review::render_screen(f, f.area(), &diff_state());
+        stoic_codex_tui_views::views::help::render(f, f.area(), HelpContext::Diff);
     });
 
     // The same board on a small laptop terminal: branch column dropped, report pane folded
@@ -278,6 +322,11 @@ fn main() {
         let state = diff_state();
         let area = f.area();
         stoic_codex_tui_views::views::diff_review::render_screen(f, area, &state);
+    });
+
+    snapshot_at("diff-40", W_COMPACT, H_COMPACT, |f| {
+        let state = diff_state();
+        stoic_codex_tui_views::views::diff_review::render_screen(f, f.area(), &state);
     });
 
     snapshot("memory", |f| {

@@ -388,3 +388,22 @@ numbers already in a register.
 state never spins, the feed flashes and fades, the hot spot is bright on its own azimuth and
 dark half a turn away, the rim outshines the disk behind it, and the outer edge reaches exactly
 zero.
+
+---
+
+# Part 3 — cosmetic pass (2026-10-26)
+
+- Added a borderless first-run welcome screen with the existing black-hole sigil, compact copy,
+  local/BYOK framing, and optional workspace/provider/model/recent-mission details. It does not
+  invent connection state when the caller has no data.
+- Added contextual help-sheet rendering for welcome, mission, diff, memory, and hole views. The
+  sheet is a raised-void overlay with no outline box; the app shell still needs to dispatch `?`
+  and Escape to show and dismiss it.
+- Narrow footers now preserve a compact `? help` route before status chips. The mission, diff, and
+  memory hints advertise the same contextual guide.
+- Diff review now uses a stacked unified layout below 72 columns in the diff pane. It shows context
+  once, expands paired old/new lines into two readable rows, keeps line numbers where possible,
+  and retains the subtle removed-line tint. Wide panes remain side-by-side.
+- Added tests plus 40-column welcome, mission, help, and diff snapshot cases. The snapshot example
+  and Rust tests could not run here because `cargo`/`rustc` are unavailable; the generated previews
+  have not yet been refreshed and this code is not claimed as compiled.

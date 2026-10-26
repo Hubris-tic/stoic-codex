@@ -178,8 +178,12 @@ pub fn header<'a>(chrome: &Chrome<'_>, width: u16) -> Line<'static> {
     let mut spans = vec![
         Span::styled("◍ ", theme::mark()),
         Span::styled("Stoic Codex", theme::title()),
-        Span::styled("  │ ", theme::rule()),
     ];
+    // The welcome frame has no tabs: omit the separator rather than leaving a stranded
+    // divider after the product name.
+    if !chrome.tabs.is_empty() {
+        spans.push(Span::styled("  │ ", theme::rule()));
+    }
     for (i, tab) in chrome.tabs.iter().enumerate() {
         // One space between cells, so an active tab never fuses to the one before it
         // (`memory▸ hole` is a bug, not a style).
@@ -249,16 +253,27 @@ pub fn footer(chrome: &Chrome<'_>, width: u16) -> Line<'static> {
     let available = width as usize;
     let mut spans: Vec<Span> = Vec::new();
     let mut left = 0usize;
+    // Keep a tiny contextual-help affordance visible on narrow screens. The full hint still
+    // wins whenever it fits; status chips give way before the only route to the key guide.
+    let compact_hint = if chrome.hint.contains('?') { "? help ".to_string() } else { String::new() };
+    let reserve = compact_hint.chars().count();
     for segment in &chrome.footer {
-        if left + segment.width() + 1 > available {
+        if left + segment.width() + 1 + reserve > available {
             break;
         }
         left += segment.width();
         spans.push(Span::styled(segment.text.clone(), segment.style));
     }
-    let hint = if chrome.hint.is_empty() { String::new() } else { format!("{} ", chrome.hint) };
+    let full_hint = if chrome.hint.is_empty() { String::new() } else { format!("{} ", chrome.hint) };
+    let hint = if left + full_hint.chars().count() < available {
+        full_hint
+    } else if left + compact_hint.chars().count() < available {
+        compact_hint
+    } else {
+        String::new()
+    };
     let hint_w = hint.chars().count();
-    if left + hint_w < available {
+    if hint_w > 0 {
         spans.push(Span::styled(" ".repeat(available - left - hint_w), Style::default()));
         spans.push(Span::styled(hint, theme::faint()));
     }
@@ -421,6 +436,29 @@ mod tests {
         assert!(text.contains("$1.20 spent"), "{text:?}");
         assert!(text.trim_end().ends_with("? help"), "{text:?}");
         assert_eq!(line.width(), 100);
+    }
+
+    #[test]
+    fn a_narrow_footer_keeps_a_compact_help_route() {
+        let c = Chrome::new("main", &TABS, TAB_MISSION)
+            .footer(Segment::chip("3 operators"))
+            .footer(Segment::chip("1 accepted"))
+            .hint("↑↓ select · enter detail · ? help · q quit");
+        let line = footer(&c, 40);
+        let text = text_of(&line);
+        assert!(text.trim_end().ends_with("? help"), "{text:?}");
+        assert_eq!(line.width(), 40);
+    }
+
+    #[test]
+    fn a_welcome_header_does_not_leave_an_empty_tab_separator() {
+        let c = Chrome::new("", &[], 0).status(Segment::new("LOCAL · BYOK", theme::muted()));
+        let line = header(&c, 40);
+        let text = text_of(&line);
+        assert!(text.starts_with("◍ Stoic Codex"), "{text}");
+        assert!(!text.contains("│"), "an empty tab list has no separator: {text}");
+        assert!(text.contains("LOCAL · BYOK"), "{text}");
+        assert!(line.width() <= 40);
     }
 
     #[test]

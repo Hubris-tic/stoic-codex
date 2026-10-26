@@ -211,7 +211,7 @@ pub fn render_screen(frame: &mut Frame, area: Rect, state: &mut MemoryGraphState
         .status(Segment::new(format!("{} nodes", nodes), t::muted()))
         .footer(Segment::chip(format!("depth {}", state.depth)))
         .footer(Segment::chip(format!("focus {}", fit(&state.focus_label(), 24))))
-        .hint("+/- depth · j/k scroll · enter open · q quit");
+        .hint("+/- depth · j/k scroll · enter open · ? help");
     let body = chrome::frame(frame, area, &chrome);
     render(frame, body, state);
 }
