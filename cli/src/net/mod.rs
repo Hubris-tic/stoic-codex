@@ -16,7 +16,7 @@
 
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub mod tls;
 
@@ -86,6 +86,17 @@ pub trait Transport {
         sink: &mut dyn FnMut(u16, &str),
     ) -> Result<Response, NetError> {
         self.send(req, &mut |chunk| sink(0, chunk))
+    }
+
+    /// Perform one request, respecting an absolute deadline when the transport supports it.
+    /// In-memory transports may ignore the deadline; the live socket transport enforces it.
+    fn send_with_deadline(
+        &self,
+        req: &HttpRequest,
+        sink: &mut dyn FnMut(&str),
+        _deadline: Option<Instant>,
+    ) -> Result<Response, NetError> {
+        self.send(req, sink)
     }
 }
 
@@ -255,8 +266,28 @@ impl LiveTransport {
         LiveTransport::new(Duration::from_secs(120))
     }
 
-    fn stream(&self, url: &Url) -> Result<Stream, NetError> {
+    fn timeout_for(&self, address: &str, deadline: Option<Instant>) -> Result<Duration, NetError> {
+        let timeout = match deadline {
+            Some(deadline) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(NetError::Timeout {
+                        address: address.to_string(),
+                        after: Duration::ZERO,
+                    });
+                }
+                self.timeout.min(remaining)
+            }
+            None => self.timeout,
+        };
+        Ok(timeout)
+    }
+
+    fn stream(&self, url: &Url, deadline: Option<Instant>) -> Result<Stream, NetError> {
         let address = url.authority();
+        self.timeout_for(&address, deadline)?;
+        // System DNS resolution is synchronous and cannot be interrupted by std. Recheck the
+        // deadline immediately afterward so a slow resolver cannot start a late socket attempt.
         let addrs: Vec<_> = (url.host.as_str(), url.port)
             .to_socket_addrs()
             .map_err(|e| NetError::Connect {
@@ -270,11 +301,12 @@ impl LiveTransport {
                 detail: "host did not resolve to any address".into(),
             });
         }
-        let tcp = TcpStream::connect_timeout(&addrs[0], self.timeout).map_err(|e| {
+        let connect_timeout = self.timeout_for(&address, deadline)?;
+        let tcp = TcpStream::connect_timeout(&addrs[0], connect_timeout).map_err(|e| {
             if e.kind() == std::io::ErrorKind::TimedOut {
                 NetError::Timeout {
                     address: address.clone(),
-                    after: self.timeout,
+                    after: connect_timeout,
                 }
             } else {
                 NetError::Connect {
@@ -283,8 +315,9 @@ impl LiveTransport {
                 }
             }
         })?;
-        tcp.set_read_timeout(Some(self.timeout)).ok();
-        tcp.set_write_timeout(Some(self.timeout)).ok();
+        let socket_timeout = self.timeout_for(&address, deadline)?;
+        tcp.set_read_timeout(Some(socket_timeout)).ok();
+        tcp.set_write_timeout(Some(socket_timeout)).ok();
         tcp.set_nodelay(true).ok();
 
         if !url.secure {
@@ -303,8 +336,7 @@ impl LiveTransport {
 
 impl Transport for LiveTransport {
     fn send(&self, req: &HttpRequest, sink: &mut dyn FnMut(&str)) -> Result<Response, NetError> {
-        let mut stream = self.stream(&req.url)?;
-        exchange(&mut stream, req, sink, self.timeout)
+        self.send_with_deadline(req, sink, None)
     }
 
     fn send_statused(
@@ -312,14 +344,105 @@ impl Transport for LiveTransport {
         req: &HttpRequest,
         sink: &mut dyn FnMut(u16, &str),
     ) -> Result<Response, NetError> {
-        let mut stream = self.stream(&req.url)?;
+        let deadline = None;
+        let mut stream =
+            DeadlineStream::new(self.stream(&req.url, deadline)?, self.timeout, deadline);
         exchange_statused(&mut stream, req, sink, self.timeout)
+    }
+
+    fn send_with_deadline(
+        &self,
+        req: &HttpRequest,
+        sink: &mut dyn FnMut(&str),
+        deadline: Option<Instant>,
+    ) -> Result<Response, NetError> {
+        let request_timeout = self.timeout_for(&req.url.authority(), deadline)?;
+        let inner = self.stream(&req.url, deadline)?;
+        let mut stream = DeadlineStream::new(inner, self.timeout, deadline);
+        exchange(&mut stream, req, sink, request_timeout)
     }
 }
 
 enum Stream {
     Plain(TcpStream),
     Tls(Box<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>),
+}
+
+impl Stream {
+    fn set_read_timeout(&self, timeout: Duration) -> std::io::Result<()> {
+        match self {
+            Stream::Plain(stream) => stream.set_read_timeout(Some(timeout)),
+            Stream::Tls(stream) => stream.sock.set_read_timeout(Some(timeout)),
+        }
+    }
+
+    fn set_write_timeout(&self, timeout: Duration) -> std::io::Result<()> {
+        match self {
+            Stream::Plain(stream) => stream.set_write_timeout(Some(timeout)),
+            Stream::Tls(stream) => stream.sock.set_write_timeout(Some(timeout)),
+        }
+    }
+}
+
+/// Refresh socket timeouts before every outer I/O operation so a stream of individually-fast
+/// reads cannot keep a mission request alive beyond its absolute retry deadline.
+struct DeadlineStream {
+    inner: Stream,
+    timeout: Duration,
+    deadline: Option<Instant>,
+}
+
+impl DeadlineStream {
+    fn new(inner: Stream, timeout: Duration, deadline: Option<Instant>) -> Self {
+        DeadlineStream {
+            inner,
+            timeout,
+            deadline,
+        }
+    }
+
+    fn timeout_for_io(&self) -> std::io::Result<Duration> {
+        match self.deadline {
+            Some(deadline) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "mission retry deadline expired",
+                    ));
+                }
+                Ok(self.timeout.min(remaining))
+            }
+            None => Ok(self.timeout),
+        }
+    }
+
+    fn prepare_read(&self) -> std::io::Result<()> {
+        self.inner.set_read_timeout(self.timeout_for_io()?)
+    }
+
+    fn prepare_write(&self) -> std::io::Result<()> {
+        self.inner.set_write_timeout(self.timeout_for_io()?)
+    }
+}
+
+impl Read for DeadlineStream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.prepare_read()?;
+        self.inner.read(buf)
+    }
+}
+
+impl Write for DeadlineStream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.prepare_write()?;
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.prepare_write()?;
+        self.inner.flush()
+    }
 }
 
 impl Read for Stream {
@@ -632,6 +755,41 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_mission_deadline_interrupts_an_in_flight_socket_read() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut request = [0u8; 1024];
+            socket
+                .set_read_timeout(Some(Duration::from_secs(1)))
+                .unwrap();
+            let _ = socket.read(&mut request).unwrap();
+            std::thread::sleep(Duration::from_millis(300));
+            let _ = socket
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+        });
+
+        let client = TcpStream::connect(address).unwrap();
+        let mut stream = DeadlineStream::new(
+            Stream::Plain(client),
+            Duration::from_secs(2),
+            Some(Instant::now() + Duration::from_millis(100)),
+        );
+        let request = HttpRequest {
+            method: "GET".into(),
+            url: Url::parse(&format!("http://{address}/slow")).unwrap(),
+            headers: Vec::new(),
+            body: Vec::new(),
+        };
+        let error = exchange(&mut stream, &request, &mut |_| {}, Duration::from_secs(2))
+            .expect_err("the delayed response must be cut off by the absolute deadline");
+        assert!(matches!(error, NetError::Timeout { .. }), "{error:?}");
+        drop(stream);
+        server.join().unwrap();
+    }
 
     #[test]
     fn parses_scheme_host_port_and_path() {

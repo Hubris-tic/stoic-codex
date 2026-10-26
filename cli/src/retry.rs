@@ -19,12 +19,145 @@
 //! * **Say what is happening.** A silent 8-second pause looks like a hang, so every attempt
 //!   after the first emits one line through the notice sink.
 //!
-//! Delays are computed, not slept, in the `plan` helper — that is what makes the policy
-//! testable without a clock and without a slow test suite.
+//! Delays are pure values and sleeping is injected by the caller, so policy tests can assert
+//! exact windows without waiting or contacting a provider. The mission clock is injectable too,
+//! which makes deadline boundaries deterministic in unit tests.
 
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::net::{HttpRequest, NetError, Response, Transport};
+
+/// One shared retry deadline for all model clients in a mission.
+///
+/// The window starts on the first retryable failure—not when the mission starts—and is shared
+/// by Strategos and every Operator. A slow plan or successful task consumes no retry budget;
+/// after the first retryable failure, backoff and socket I/O for later retries share one deadline.
+#[derive(Clone)]
+pub struct MissionRetryWindow {
+    state: Arc<MissionRetryState>,
+}
+
+struct MissionRetryState {
+    budget: Duration,
+    started: Mutex<Option<Instant>>,
+    seed: u64,
+    now: Arc<dyn Fn() -> Instant + Send + Sync>,
+}
+
+/// Per-client view of a mission retry window. Each participant gets a stable, distinct jitter
+/// stream derived from the mission seed and its label.
+pub struct MissionRetryClient {
+    state: Arc<MissionRetryState>,
+    seed: u64,
+    request_sequence: AtomicU64,
+}
+
+impl MissionRetryWindow {
+    pub fn new(budget: Duration) -> Self {
+        Self::with_seed(budget, fresh_mission_seed())
+    }
+
+    /// Deterministic seed injection for tests and reproducible retry schedules.
+    pub fn with_seed(budget: Duration, seed: u64) -> Self {
+        Self::with_clock(budget, seed, Arc::new(Instant::now))
+    }
+
+    fn with_clock(
+        budget: Duration,
+        seed: u64,
+        now: Arc<dyn Fn() -> Instant + Send + Sync>,
+    ) -> Self {
+        MissionRetryWindow {
+            state: Arc::new(MissionRetryState {
+                budget,
+                started: Mutex::new(None),
+                seed: mix64(seed),
+                now,
+            }),
+        }
+    }
+
+    pub fn client(&self, participant: &str) -> MissionRetryClient {
+        MissionRetryClient {
+            state: self.state.clone(),
+            seed: mix64(self.state.seed ^ stable_hash(participant)),
+            request_sequence: AtomicU64::new(0),
+        }
+    }
+}
+
+impl MissionRetryClient {
+    fn next_request_salt(&self) -> u64 {
+        let sequence = self.request_sequence.fetch_add(1, Ordering::Relaxed);
+        mix64(self.seed ^ sequence.wrapping_mul(0x9E37_79B9_7F4A_7C15))
+    }
+
+    /// Start the shared window on the first retryable failure, then permit a wait only if it
+    /// finishes strictly before the mission deadline. A zero-duration window disables retries.
+    fn delay_fits(&self, delay: Duration) -> bool {
+        let now = (self.state.now)();
+        let mut started = self
+            .state
+            .started
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let began = *started.get_or_insert(now);
+        let elapsed = now.saturating_duration_since(began);
+        let remaining = self.state.budget.saturating_sub(elapsed);
+        !remaining.is_zero() && delay < remaining
+    }
+
+    fn expired(&self) -> bool {
+        let now = (self.state.now)();
+        self.deadline()
+            .map(|deadline| now >= deadline)
+            .unwrap_or(false)
+    }
+
+    fn deadline(&self) -> Option<Instant> {
+        let started = self
+            .state
+            .started
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        started
+            .as_ref()
+            .and_then(|began| began.checked_add(self.state.budget))
+    }
+
+    fn budget(&self) -> Duration {
+        self.state.budget
+    }
+}
+
+fn stable_hash(text: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for byte in text.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01B3);
+    }
+    mix64(hash)
+}
+
+fn mix64(mut value: u64) -> u64 {
+    value ^= value >> 30;
+    value = value.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    value ^= value >> 27;
+    value = value.wrapping_mul(0x94D0_49BB_1331_11EB);
+    value ^ (value >> 31)
+}
+
+fn fresh_mission_seed() -> u64 {
+    static NEXT_MISSION: AtomicU64 = AtomicU64::new(0);
+    let wall = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or(0);
+    let sequence = NEXT_MISSION.fetch_add(1, Ordering::Relaxed);
+    mix64(wall ^ u64::from(std::process::id()).rotate_left(17) ^ sequence)
+}
 
 /// How hard to try again.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,8 +171,8 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    /// Four attempts: ~0.5 s, ~1 s, ~2 s. Enough to ride out a burst, short enough that a
-    /// user who is actually offline is told so quickly.
+    /// Four attempts: equal-jittered waits of roughly 0.25–0.5 s, 0.5–1 s, and 1–2 s.
+    /// Enough to ride out a burst, short enough that a user who is offline is told quickly.
     pub fn standard() -> RetryPolicy {
         RetryPolicy {
             attempts: 4,
@@ -174,33 +307,120 @@ pub fn buffered(
     notice: &mut dyn FnMut(&str),
     sleep: &mut dyn FnMut(Duration),
 ) -> Result<(Response, String), NetError> {
+    buffered_inner(transport, request, policy, None, notice, sleep)
+}
+
+/// Buffered retry loop using a mission-shared deadline and participant-specific jitter seed.
+pub fn buffered_for_mission(
+    transport: &dyn Transport,
+    request: &HttpRequest,
+    policy: &RetryPolicy,
+    mission: &MissionRetryClient,
+    notice: &mut dyn FnMut(&str),
+    sleep: &mut dyn FnMut(Duration),
+) -> Result<(Response, String), NetError> {
+    buffered_inner(transport, request, policy, Some(mission), notice, sleep)
+}
+
+fn buffered_inner(
+    transport: &dyn Transport,
+    request: &HttpRequest,
+    policy: &RetryPolicy,
+    mission: Option<&MissionRetryClient>,
+    notice: &mut dyn FnMut(&str),
+    sleep: &mut dyn FnMut(Duration),
+) -> Result<(Response, String), NetError> {
+    let mission_salt = mission.map(MissionRetryClient::next_request_salt);
     let mut attempt = 0;
     loop {
         let mut body = String::new();
-        let result = transport.send(request, &mut |chunk| body.push_str(chunk));
+        let mut collect = |chunk: &str| body.push_str(chunk);
+        let result = match mission {
+            Some(mission) => {
+                transport.send_with_deadline(request, &mut collect, mission.deadline())
+            }
+            None => transport.send(request, &mut collect),
+        };
         let finished = policy.exhausted(attempt);
         match result {
             Ok(response) if response.is_success() || finished => return Ok((response, body)),
             Ok(response) if is_retryable_status(response.status) => {
-                let wait = policy.delay_after(attempt, retry_after(&response), salt());
-                notice(&notice_line(
-                    attempt,
-                    policy.attempts,
-                    &format!("HTTP {}", response.status),
-                    wait,
-                ));
+                let why = format!("HTTP {}", response.status);
+                let delay_attempt = if mission.is_some() {
+                    attempt.saturating_add(1)
+                } else {
+                    // Preserve the established standalone buffered retry timing. Mission
+                    // requests use the next 1-based attempt so their first retry is jittered.
+                    attempt
+                };
+                let wait = policy.delay_after(
+                    delay_attempt,
+                    retry_after(&response),
+                    mission_salt.unwrap_or_else(salt),
+                );
+                if !mission_delay_fits(mission, wait, attempt, policy.attempts, &why, notice) {
+                    return Ok((response, body));
+                }
+                notice(&notice_line(attempt, policy.attempts, &why, wait));
                 sleep(wait);
+                if mission_window_expired(mission) {
+                    notice(&mission_expired_notice(attempt, policy.attempts, &why));
+                    return Ok((response, body));
+                }
             }
             Ok(response) => return Ok((response, body)),
             Err(e) if !finished && is_retryable_transport(&e) => {
-                let wait = policy.delay_with(attempt + 1, salt());
-                notice(&notice_line(attempt, policy.attempts, &short(&e), wait));
+                let why = short(&e);
+                let wait =
+                    policy.delay_with(attempt.saturating_add(1), mission_salt.unwrap_or_else(salt));
+                if !mission_delay_fits(mission, wait, attempt, policy.attempts, &why, notice) {
+                    return Err(e);
+                }
+                notice(&notice_line(attempt, policy.attempts, &why, wait));
                 sleep(wait);
+                if mission_window_expired(mission) {
+                    notice(&mission_expired_notice(attempt, policy.attempts, &why));
+                    return Err(e);
+                }
             }
             Err(e) => return Err(e),
         }
         attempt += 1;
     }
+}
+
+fn mission_delay_fits(
+    mission: Option<&MissionRetryClient>,
+    wait: Duration,
+    attempt: u32,
+    total: u32,
+    why: &str,
+    notice: &mut dyn FnMut(&str),
+) -> bool {
+    let Some(mission) = mission else {
+        return true;
+    };
+    if mission.delay_fits(wait) {
+        return true;
+    }
+    notice(&format!(
+        "mission retry window ({:.1}s) cannot fit a {:.1}s wait after {why}; stopping before attempt {} of {total}",
+        mission.budget().as_secs_f64(),
+        wait.as_secs_f64(),
+        attempt + 2,
+    ));
+    false
+}
+
+fn mission_window_expired(mission: Option<&MissionRetryClient>) -> bool {
+    mission.map(MissionRetryClient::expired).unwrap_or(false)
+}
+
+fn mission_expired_notice(attempt: u32, total: u32, why: &str) -> String {
+    format!(
+        "mission retry window expired during the wait after {why}; not starting attempt {} of {total}",
+        attempt + 2,
+    )
 }
 
 /// Perform a *streaming* request. The body goes to `sink` as it arrives.
@@ -291,6 +511,7 @@ mod tests {
     struct Script {
         answers: Vec<Answer>,
         seen: std::cell::RefCell<Vec<usize>>,
+        deadlines: std::cell::RefCell<Vec<Option<Instant>>>,
     }
 
     enum Answer {
@@ -304,6 +525,7 @@ mod tests {
             Script {
                 answers,
                 seen: std::cell::RefCell::new(Vec::new()),
+                deadlines: std::cell::RefCell::new(Vec::new()),
             }
         }
         fn calls(&self) -> usize {
@@ -352,6 +574,16 @@ mod tests {
                 headers: Vec::new(),
             })
         }
+
+        fn send_with_deadline(
+            &self,
+            req: &HttpRequest,
+            sink: &mut dyn FnMut(&str),
+            deadline: Option<Instant>,
+        ) -> Result<Response, NetError> {
+            self.deadlines.borrow_mut().push(deadline);
+            self.send(req, sink)
+        }
     }
 
     fn request() -> HttpRequest {
@@ -361,6 +593,19 @@ mod tests {
             headers: Vec::new(),
             body: b"{}".to_vec(),
         }
+    }
+
+    fn fake_window(budget: Duration, seed: u64) -> (MissionRetryWindow, Arc<AtomicU64>, Instant) {
+        let elapsed_ns = Arc::new(AtomicU64::new(0));
+        let clock_elapsed = elapsed_ns.clone();
+        let epoch = Instant::now();
+        let now: Arc<dyn Fn() -> Instant + Send + Sync> =
+            Arc::new(move || epoch + Duration::from_nanos(clock_elapsed.load(Ordering::Relaxed)));
+        (
+            MissionRetryWindow::with_clock(budget, seed, now),
+            elapsed_ns,
+            epoch,
+        )
     }
 
     fn run_buffered(
@@ -628,6 +873,194 @@ mod tests {
             }
         }
         assert!(seen.len() > 20, "the salt must actually change the wait");
+    }
+
+    #[test]
+    fn subsequent_mission_requests_receive_the_shared_absolute_deadline() {
+        let (window, _, epoch) = fake_window(Duration::from_secs(5), 0x55);
+        let client = window.client("strategos");
+        let script = Script::new(vec![
+            Answer::Status(429, "rate limited"),
+            Answer::Status(200, "recovered"),
+        ]);
+        let result = buffered_for_mission(
+            &script,
+            &request(),
+            &RetryPolicy::immediate(),
+            &client,
+            &mut |_| {},
+            &mut |_| {},
+        )
+        .unwrap();
+
+        assert_eq!(result.0.status, 200);
+        assert_eq!(
+            *script.deadlines.borrow(),
+            vec![None, Some(epoch + Duration::from_secs(5))]
+        );
+    }
+
+    #[test]
+    fn the_first_mission_status_retry_waits_before_attempt_two() {
+        let (window, _, _) = fake_window(Duration::from_secs(5), 0xabc);
+        let client = window.client("strategos");
+        let script = Script::new(vec![
+            Answer::Status(429, "rate limited"),
+            Answer::Status(200, "recovered"),
+        ]);
+        let mut waits = Vec::new();
+        let result = buffered_for_mission(
+            &script,
+            &request(),
+            &RetryPolicy::standard(),
+            &client,
+            &mut |_| {},
+            &mut |wait| waits.push(wait),
+        )
+        .unwrap();
+
+        assert_eq!(result.0.status, 200);
+        assert_eq!(script.calls(), 2);
+        assert_eq!(waits.len(), 1);
+        assert!(
+            (Duration::from_millis(250)..=Duration::from_millis(500)).contains(&waits[0]),
+            "first mission retry should be jittered from the base: {:?}",
+            waits[0]
+        );
+    }
+
+    #[test]
+    fn standalone_buffered_status_retry_timing_is_unchanged() {
+        let script = Script::new(vec![
+            Answer::Status(429, "rate limited"),
+            Answer::Status(200, "recovered"),
+        ]);
+        let (result, waits, _) = run_buffered(&script, RetryPolicy::standard());
+
+        assert_eq!(result.unwrap().0.status, 200);
+        assert_eq!(script.calls(), 2);
+        assert_eq!(waits, vec![Duration::ZERO]);
+    }
+
+    #[test]
+    fn mission_jitter_is_reproducible_and_distinct_per_operator() {
+        let window = MissionRetryWindow::with_seed(Duration::from_secs(30), 0x1234);
+        let first = window.client("x1-write").next_request_salt();
+        let second = window.client("x2-check").next_request_salt();
+        let reproduced = MissionRetryWindow::with_seed(Duration::from_secs(30), 0x1234)
+            .client("x1-write")
+            .next_request_salt();
+
+        assert_ne!(first, second, "operators must not share a retry stream");
+        assert_eq!(first, reproduced, "the same mission seed is reproducible");
+        let policy = RetryPolicy {
+            attempts: 4,
+            base: Duration::from_secs(4),
+            ceiling: Duration::from_secs(8),
+        };
+        assert_ne!(
+            policy.delay_with(1, first),
+            policy.delay_with(1, second),
+            "the participant streams should actually decorrelate the wait"
+        );
+    }
+
+    #[test]
+    fn mission_window_is_shared_and_stops_retries_after_its_deadline() {
+        let (window, elapsed_ns, epoch) = fake_window(Duration::from_millis(1), 7);
+        let first_client = window.client("x1-write");
+        assert!(
+            first_client.deadline().is_none(),
+            "the timer has not started yet"
+        );
+        let first_script = Script::new(vec![
+            Answer::Status(429, "rate limited"),
+            Answer::Status(200, "should not be reached"),
+        ]);
+        let mut first_notices = Vec::new();
+        let first = buffered_for_mission(
+            &first_script,
+            &request(),
+            &RetryPolicy::immediate(),
+            &first_client,
+            &mut |notice| first_notices.push(notice.to_string()),
+            &mut |duration| {
+                assert_eq!(duration, Duration::ZERO);
+                elapsed_ns.store(2_000_000, Ordering::Relaxed);
+            },
+        )
+        .unwrap();
+        assert_eq!(first.0.status, 429);
+        assert_eq!(
+            first_client.deadline(),
+            Some(epoch + Duration::from_millis(1))
+        );
+        assert_eq!(first_script.calls(), 1);
+        assert!(first_notices
+            .iter()
+            .any(|line| line.contains("expired during the wait")));
+
+        let second_client = window.client("x2-check");
+        let second_script = Script::new(vec![
+            Answer::Status(429, "still rate limited"),
+            Answer::Status(200, "must not be reached"),
+        ]);
+        let mut second_notices = Vec::new();
+        let second = buffered_for_mission(
+            &second_script,
+            &request(),
+            &RetryPolicy::immediate(),
+            &second_client,
+            &mut |notice| second_notices.push(notice.to_string()),
+            &mut |_| {},
+        )
+        .unwrap();
+        assert_eq!(second.0.status, 429);
+        assert_eq!(
+            second_script.calls(),
+            1,
+            "all clients share the same deadline"
+        );
+        assert!(second_notices
+            .iter()
+            .any(|line| line.contains("cannot fit")));
+    }
+
+    #[test]
+    fn a_retry_wait_must_finish_strictly_before_the_shared_deadline() {
+        let (window, elapsed_ns, epoch) = fake_window(Duration::from_secs(1), 11);
+        let client = window.client("x1-write");
+        assert!(client.delay_fits(Duration::from_millis(500)));
+        assert_eq!(client.deadline(), Some(epoch + Duration::from_secs(1)));
+
+        elapsed_ns.store(500_000_000, Ordering::Relaxed);
+        assert!(
+            !client.delay_fits(Duration::from_millis(500)),
+            "a wait that lands exactly on the deadline is rejected"
+        );
+    }
+
+    #[test]
+    fn a_retry_delay_longer_than_the_mission_window_is_not_slept() {
+        let (window, _, _) = fake_window(Duration::from_millis(1), 9);
+        let client = window.client("x3-ship");
+        let script = Script::new(vec![
+            Answer::Status(429, "rate limited"),
+            Answer::Status(200, "must not be reached"),
+        ]);
+        let mut waits = Vec::new();
+        let result = buffered_for_mission(
+            &script,
+            &request(),
+            &RetryPolicy::standard(),
+            &client,
+            &mut |_| {},
+            &mut |duration| waits.push(duration),
+        )
+        .unwrap();
+        assert_eq!(result.0.status, 429);
+        assert_eq!(script.calls(), 1);
+        assert!(waits.is_empty(), "over-budget backoff must not be slept");
     }
 
     #[test]

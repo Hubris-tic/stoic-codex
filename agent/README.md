@@ -49,6 +49,11 @@ committee. One agent decides, three agents work, one agent judges.
 
 - **Strategos has no tools.** Its entire job is the plan and the review. It cannot edit a
   file, so it cannot break the repository while thinking about it.
+- **CLI mission retries share one bounded window.** The CLI gives Strategos and every Operator
+  independent equal-jitter streams over a shared `providers.mission_retry_window_secs` deadline
+  (30 seconds by default, starting at the first retryable provider error). The cap covers retry
+  waits and subsequent live retry requests; the provider-agnostic `run_mission` library remains
+  unchanged. Standalone commands keep their generic retry behavior.
 - **An operator is confined to its worktree.** Its own `Sandbox`, its own `ToolRegistry`,
   its own model client (a `Model` that carries connection state must not be shared across
   threads). The sandbox rejects absolute paths, `..`, symlink escapes (including dangling

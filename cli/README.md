@@ -56,6 +56,7 @@ misspelled key is a hard error, not a silent no-op.
     "stream": true,
     "timeout_secs": 120,
     "max_attempts": 4,
+    "mission_retry_window_secs": 30,
     "base_url": null
   }
 }
@@ -98,6 +99,12 @@ The estimate is not billing data; JSON output labels it with `cost_basis: regist
 Provider requests use four attempts by default, configurable with `providers.max_attempts`.
 Pass `--max-attempts N` to override that limit for one `run`, `agent run`, `mission plan/run`,
 `providers models`, or `providers test` invocation. `N` must be 1–10; `1` disables retries.
+Missions also share `providers.mission_retry_window_secs` across Strategos and every Operator
+(default 30 seconds; valid range 1–600). Its clock starts at the first retryable provider failure;
+participant-specific equal jitter prevents synchronized retries. The window bounds backoff and
+subsequent live retry requests, while standalone commands retain the generic retry policy. The
+blocking system resolver cannot be interrupted, and a request already in flight before the first
+retryable failure still uses `timeout_secs`.
 
 By default, every successful `run` turn is also saved as a local conversation transcript. The
 session ID appears in the stderr summary and in JSON output as `session_id`:

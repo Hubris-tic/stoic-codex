@@ -1,7 +1,7 @@
 # Stoic Codex — remaining work
 
 Status as of **2026-10-26**. The seven local crates were rebuilt and tested with stable Rust
-1.99.1 under `/var/tmp`: **575 tests passed, 0 failed, and 4 network/live tests were skipped** by
+1.99.1 under `/var/tmp`: **585 tests passed, 0 failed, and 4 network/live tests were skipped** by
 default. `cargo build --all-targets` passed for all seven local crates with no warnings. The optional
 TypeDB feature also builds cleanly and its non-live tests pass; actual daemon-backed checks remain
 open because no local TypeDB address was configured. Targeted rustfmt checks pass for the files
@@ -139,9 +139,14 @@ just because its model is listed here.
 - [x] Strategos names The Phalanx between plan and deploy; `MissionEvent::Named { renames }`
       emitted; codes flow into `Mission::name_phalanx` / `Agent::rename`.
 - [x] Commit message and log format use codes (`[x1-write]`, `…operators of The Phalanx…`).
-- [ ] **Retries inside a mission.** `RemoteModel` uses the standard policy, but a mission has N
-      operators hitting one rate limit at once; the backoff needs the mission's own jitter seed
-      and a cap on total wall clock. **M**
+- [x] **Retries inside a mission.** The CLI gives Strategos and every Operator independent
+      equal-jitter streams over one `providers.mission_retry_window_secs` budget (default 30 s,
+      valid 1–600), starting at the first retryable failure. Backoffs and later live retry socket
+      operations share the deadline; standalone generic retries are unchanged. Deterministic
+      fake-clock/jitter tests, a loopback in-flight-timeout test, and a scripted mission retry all
+      pass without external provider calls.
+      Requests already in flight before the first failure retain `timeout_secs`, and synchronous
+      system DNS cannot be interrupted. **M**
 - [x] **Partial failure policy.** Useful-work first: exit 0 if at least one applicable file lands,
       even if other operators fail/reject; exit 1 only when nothing lands. The terminal summary says
       `outcome partial success`; `--json` emits `partial_success` / `complete` / `failed`. End-to-end
@@ -217,7 +222,7 @@ just because its model is listed here.
 ## 8. Release gate (do not tag before all of these)
 
 - [x] All seven local crates: `cargo build --all-targets` passed with no warnings; `cargo test`
-      passed **575 tests, 0 failed** (4 live/network tests skipped by default). The optional TypeDB
+      passed **585 tests, 0 failed** (4 live/network tests skipped by default). The optional TypeDB
       feature build and non-live tests pass; daemon-backed integration remains open. The separate
       upstream integration patch was not part of this local-crate run.
 - [ ] `cargo test -- --ignored` green **with a key present** for Gemini; skipped-with-message

@@ -110,6 +110,9 @@ pub struct ProviderSettings {
     /// connection that never opened). 1 disables retrying; the default is 4.
     #[serde(default = "default_attempts")]
     pub max_attempts: Option<u32>,
+    /// Shared wall-clock retry window for a mission, measured from its first retryable error.
+    #[serde(default = "default_mission_retry_window_secs")]
+    pub mission_retry_window_secs: u64,
     /// Route every request through this base URL, keeping the provider's own path. For a
     /// local proxy, a gateway, or a test server — the provider definition is untouched.
     #[serde(default)]
@@ -124,6 +127,10 @@ fn default_attempts() -> Option<u32> {
     Some(4)
 }
 
+fn default_mission_retry_window_secs() -> u64 {
+    30
+}
+
 impl Default for ProviderSettings {
     fn default() -> Self {
         ProviderSettings {
@@ -135,6 +142,7 @@ impl Default for ProviderSettings {
             stream: true,
             timeout_secs: default_timeout(),
             max_attempts: default_attempts(),
+            mission_retry_window_secs: default_mission_retry_window_secs(),
             base_url: None,
         }
     }
@@ -194,6 +202,9 @@ impl Config {
                 return Err("providers.max_attempts must be between 1 and 10".into());
             }
         }
+        if !(1..=600).contains(&self.providers.mission_retry_window_secs) {
+            return Err("providers.mission_retry_window_secs must be between 1 and 600".into());
+        }
         Ok(())
     }
 }
@@ -219,6 +230,7 @@ mod tests {
         assert!(cfg.memory.allow_daemon);
         assert_eq!(cfg.memory.context_budget, 1200);
         assert_eq!(cfg.memory.context_token_budget, 400);
+        assert_eq!(cfg.providers.mission_retry_window_secs, 30);
     }
 
     #[test]
@@ -233,6 +245,7 @@ mod tests {
         assert_eq!(cfg.memory.context_budget, 400);
         assert_eq!(cfg.memory.context_token_budget, 128);
         assert_eq!(cfg.memory.daemon_address, "127.0.0.1:1729");
+        assert_eq!(cfg.providers.mission_retry_window_secs, 30);
     }
 
     #[test]
@@ -263,6 +276,7 @@ mod tests {
         cfg.memory.daemon_address = "127.0.0.1:1800".into();
         cfg.memory.context_budget = 900;
         cfg.memory.context_token_budget = 300;
+        cfg.providers.mission_retry_window_secs = 90;
         cfg.save(&path).unwrap();
         let back = Config::load(&path).unwrap();
         assert_eq!(back, cfg);
@@ -290,6 +304,16 @@ mod tests {
         let mut cfg = Config::default();
         cfg.memory.context_budget = 20;
         assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn mission_retry_window_must_be_between_one_and_six_hundred_seconds() {
+        for seconds in [0, 601] {
+            let mut cfg = Config::default();
+            cfg.providers.mission_retry_window_secs = seconds;
+            let error = cfg.validate().unwrap_err();
+            assert!(error.contains("mission_retry_window_secs"), "{error}");
+        }
     }
 
     #[test]

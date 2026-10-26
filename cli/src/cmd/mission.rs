@@ -6,6 +6,8 @@
 
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 use stoic_codex_agent::{
     provisional_name, run_mission, AgentConfig, Event, MissionConfig, MissionEvent, MissionOutcome,
@@ -210,14 +212,43 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let (cfg, resolved) = resolve(parsed, paths)?;
     let n = agent_count(parsed)?;
 
-    // Strategos gets its own client: it is a different agent with a different prompt, and
-    // keeping the connection separate means a plan cannot be confused with a Operator turn.
-    let strategos = RemoteModel::new(&resolved.provider, paths, &cfg, Some(&resolved.model))
-        .map_err(CmdError::failed)?;
-    let operators = Operator::squad(n, |_codename| {
+    // Strategos and every Operator share one retry deadline, while each client gets an
+    // independent jitter stream. The cap begins at the first retryable error, not mission start.
+    let retry_window = crate::retry::MissionRetryWindow::new(Duration::from_secs(
+        cfg.providers.mission_retry_window_secs,
+    ));
+    let quiet = parsed.switch("quiet");
+    let json = parsed.switch("json");
+    let retry_sink = ctx.err.clone();
+    let retry_notice: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |message| {
+        if quiet || json {
+            return;
+        }
+        let mut sink = retry_sink.clone();
+        let _ = writeln!(sink, "{}", row("[mission]", "retry", message));
+    });
+
+    // Strategos gets its own client: a plan cannot be confused with an Operator turn.
+    let strategos = RemoteModel::new_for_mission(
+        &resolved.provider,
+        paths,
+        &cfg,
+        Some(&resolved.model),
+        retry_window.client(STRATEGOS),
+        retry_notice.clone(),
+    )
+    .map_err(CmdError::failed)?;
+    let operators = Operator::squad(n, |codename| {
         Box::new(
-            RemoteModel::new(&resolved.provider, paths, &cfg, Some(&resolved.model))
-                .expect("provider resolved for the mission"),
+            RemoteModel::new_for_mission(
+                &resolved.provider,
+                paths,
+                &cfg,
+                Some(&resolved.model),
+                retry_window.client(codename),
+                retry_notice.clone(),
+            )
+            .expect("provider resolved for the mission"),
         )
     });
 
@@ -248,8 +279,6 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     };
     mission_cfg.max_parallel = mission_cfg.max_parallel.max(1);
 
-    let quiet = parsed.switch("quiet");
-    let json = parsed.switch("json");
     // A cloned sink: `Sink` is `Send + Sync` and serialises its own writes, so three agents
     // can report at once without interleaving half-lines. The clone happens inside the
     // closure so it stays `Fn` (the mission may call it from several threads).

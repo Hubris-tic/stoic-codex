@@ -197,6 +197,15 @@ fn nothing() -> Vec<u8> {
     openai_json("Nothing to do here.")
 }
 
+fn retry_after_zero() -> Vec<u8> {
+    let body = r#"{"error":{"message":"rate limited"}}"#;
+    format!(
+        "HTTP/1.1 429 Too Many Requests\r\ncontent-type: application/json\r\nretry-after: 0\r\ncontent-length: {}\r\n\r\n{body}",
+        body.len()
+    )
+    .into_bytes()
+}
+
 // ── tests ────────────────────────────────────────────────────────────────────────────────
 
 #[test]
@@ -262,6 +271,54 @@ fn three_operators_land_three_files_and_one_commit() {
     assert!(
         branches.trim().is_empty(),
         "branches left behind: {branches}"
+    );
+}
+
+#[test]
+fn mission_run_retries_the_plan_with_its_mission_retry_policy() {
+    let repo = Repo::new("mission-retry");
+    let plan = serde_json::json!({
+        "assignments": [{
+            "codename": "slot-1",
+            "code": "x1-write",
+            "task": "create retry.txt containing the word recovered"
+        }]
+    });
+    let stub = Stub::script(
+        "mission-retry",
+        vec![
+            retry_after_zero(),
+            openai_json(&plan.to_string()),
+            write("retry.txt", "recovered\n"),
+            done("Wrote retry.txt."),
+            review(&[("x1-write", true)], "assignment complete"),
+        ],
+    );
+    let mut rig = Rig::new("mission-retry", &stub.base_url());
+
+    let code = rig.invoke(&[
+        "mission",
+        "run",
+        "create retry.txt",
+        "--repo",
+        repo.root.to_str().unwrap(),
+        "--agents",
+        "1",
+        "--max-attempts",
+        "4",
+    ]);
+
+    assert_eq!(code, OK, "stderr:\n{}", rig.err());
+    assert_eq!(repo.read("retry.txt"), "recovered\n");
+    assert_eq!(
+        stub.join().len(),
+        5,
+        "one retry plus plan, operator, and review"
+    );
+    assert!(
+        rig.err().contains("[mission]") && rig.err().contains("HTTP 429"),
+        "mission retry notice missing: {}",
+        rig.err()
     );
 }
 

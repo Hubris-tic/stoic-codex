@@ -5,6 +5,7 @@
 //! back into the canonical IR. Everything vendor-specific is still the adapter's business —
 //! this file never reads a vendor JSON field.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -29,16 +30,49 @@ pub struct RemoteModel {
     base_url: Option<String>,
     model_override: Option<String>,
     retry_policy: crate::retry::RetryPolicy,
+    mission_retry: Option<crate::retry::MissionRetryClient>,
+    retry_notice: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
 impl RemoteModel {
     /// Resolve everything a request needs *once*, at construction: the adapter, the
-    /// credential, and any base-URL override. A squad builds one of these per member.
+    /// credential, and any base-URL override. Standalone commands retain generic retrying.
     pub fn new(
         provider: &str,
         paths: &Paths,
         cfg: &Config,
         model_override: Option<&str>,
+    ) -> Result<RemoteModel, String> {
+        Self::build(provider, paths, cfg, model_override, None, Arc::new(|_| {}))
+    }
+
+    /// Construct a mission participant with a shared wall-clock retry budget and a
+    /// participant-specific deterministic jitter stream.
+    pub fn new_for_mission(
+        provider: &str,
+        paths: &Paths,
+        cfg: &Config,
+        model_override: Option<&str>,
+        mission_retry: crate::retry::MissionRetryClient,
+        retry_notice: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Result<RemoteModel, String> {
+        Self::build(
+            provider,
+            paths,
+            cfg,
+            model_override,
+            Some(mission_retry),
+            retry_notice,
+        )
+    }
+
+    fn build(
+        provider: &str,
+        paths: &Paths,
+        cfg: &Config,
+        model_override: Option<&str>,
+        mission_retry: Option<crate::retry::MissionRetryClient>,
+        retry_notice: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Result<RemoteModel, String> {
         let adapter = resolve_adapter(provider, paths).map_err(|e| e.to_string())?;
         // The auth shape is decided by the adapter, so ask it with a throwaway request
@@ -59,6 +93,8 @@ impl RemoteModel {
             base_url: cfg.providers.base_url.clone(),
             model_override: model_override.map(|m| m.to_string()),
             retry_policy: retry_policy(cfg),
+            mission_retry,
+            retry_notice,
         })
     }
 
@@ -98,16 +134,28 @@ impl RemoteModel {
 impl Model for RemoteModel {
     fn complete(&self, request: &CanonicalRequest) -> Result<CanonicalResponse, ModelError> {
         let http = self.http(request)?;
-        // Store the config-backed policy on the handle so agents and missions honor the
-        // same retry limit as a single turn, including a per-command override.
-        let (response, body) = crate::retry::buffered(
-            &self.transport,
-            &http,
-            &self.retry_policy,
-            &mut |_| {},
-            &mut crate::retry::real_sleep,
-        )
-        .map_err(|e| ModelError::Transport(format!("{e} ({})", http.url.display_redacted())))?;
+        // Standalone requests keep generic retries; mission participants additionally
+        // share a mission deadline and emit bounded retry notices through their run sink.
+        let mut notice = |line: &str| (self.retry_notice)(line);
+        let result = match &self.mission_retry {
+            Some(mission) => crate::retry::buffered_for_mission(
+                &self.transport,
+                &http,
+                &self.retry_policy,
+                mission,
+                &mut notice,
+                &mut crate::retry::real_sleep,
+            ),
+            None => crate::retry::buffered(
+                &self.transport,
+                &http,
+                &self.retry_policy,
+                &mut notice,
+                &mut crate::retry::real_sleep,
+            ),
+        };
+        let (response, body) = result
+            .map_err(|e| ModelError::Transport(format!("{e} ({})", http.url.display_redacted())))?;
 
         if !response.is_success() {
             let value: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
