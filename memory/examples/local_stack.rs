@@ -2,26 +2,28 @@
 //! backend, then stop it. Nothing leaves the machine and no key is involved.
 //!
 //! ```bash
-//! ZENITHAL_TYPEDB_BIN=/path/to/typedb cargo run --features typedb --example local_stack
+//! STOIC_CODEX_TYPEDB_BIN=/path/to/typedb cargo run --features typedb --example local_stack
 //! ```
 //!
 //! With the feature off, the same program runs on the in-memory backend.
 
-use zenithal_memory::MemoryStore;
+use stoic_codex_memory::MemoryStore;
 // The store types are only touched by the daemon-backed branch, so without the feature
 // they would be unused imports.
 #[cfg(feature = "typedb")]
-use zenithal_memory::{EdgeKind, MemoryEdge, MemoryNode, NodeKind, Query};
+use stoic_codex_memory::{EdgeKind, MemoryEdge, MemoryNode, NodeKind, Query};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "typedb")]
     {
-        let mut config = zenithal_memory::daemon::DaemonConfig::default();
+        let mut config = stoic_codex_memory::daemon::DaemonConfig::default();
         config.address =
-            std::env::var("ZENITHAL_DEMO_ADDR").unwrap_or_else(|_| "127.0.0.1:1730".into());
-        config.database = "zenithal_demo".into();
-        if let Ok(bin) = std::env::var("ZENITHAL_TYPEDB_BIN") {
-            println!("using daemon binary from ZENITHAL_TYPEDB_BIN");
+            std::env::var("STOIC_CODEX_DEMO_ADDR").unwrap_or_else(|_| "127.0.0.1:1730".into());
+        config.database = "stoic_codex_demo".into();
+        if let Ok(bin) = std::env::var("STOIC_CODEX_TYPEDB_BIN")
+            .or_else(|_| std::env::var("ZENITHAL_TYPEDB_BIN"))
+        {
+            println!("using daemon binary from STOIC_CODEX_TYPEDB_BIN");
             let _ = bin;
         }
 

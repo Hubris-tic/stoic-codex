@@ -1,10 +1,13 @@
-# TUI rebrand inventory
+# Upstream TUI rebrand inventory
 
-**Answer to "is it also in the TUI?" — no. Not one string.** Everything renamed so far
-lives in `zenithal-providers`, the docs and the GitHub repo. The TUI is still 100% upstream
-`codex`, because rebranding it means patching upstream files, which we haven't started.
+**Scope clarification (2026-10-26):** this inventory tracks the upstream integration boundary
+under `codex-rs/tui` and `codex-rs/cli`; it is not a status report about the standalone `tui/`
+crate in this repository. The standalone TUI now displays “Stoic Codex” in its header, and its
+cell-grid previews were adjusted and re-rasterized. Rebuilding those previews from the Rust
+snapshot example remains pending because this environment has no Rust toolchain.
 
-Scope, measured against `Hubris-tic/zenithal@main`:
+The counts below are a historical audit of upstream-facing files, not a fresh count against the
+current public repository.
 
 | Measurement | Count |
 |---|---|
@@ -27,7 +30,7 @@ These are not about looks. Each one makes the product wrong or unsafe for a fork
 | `tui/src/bottom_pane/feedback_view.rs:18` | `github.com/openai/codex/issues/new?template=3-cli.yml` | Users' bug reports land in a tracker we can't triage | `ISSUES_URL` |
 | `tui/src/bottom_pane/memories_settings_view.rs:36` | `developers.openai.com/codex/memories` | Docs link for a feature that will not match our implementation | `DOCS_URL` |
 | ~~`tui/src/custom_terminal.rs:1306`~~ | ~~`auth.openai.com/oauth/authorize…`~~ | **FALSE POSITIVE — corrected.** This is inside a `#[cfg(test)]` module (a hyperlink-wrapping fixture), not shipped code. No action. | — |
-| `cli/src/desktop_app/mac.rs:10,12` | `persistent.oaistatic.com/codex-app-prod/Codex.dmg` | `zenithal app` would **download and install OpenAI's signed desktop app** | remove the subcommand or repoint |
+| `cli/src/desktop_app/mac.rs:10,12` | `persistent.oaistatic.com/codex-app-prod/Codex.dmg` | `stoic-codex app` would **download and install OpenAI's signed desktop app** | remove the subcommand or repoint |
 | `cli/src/doctor/desktop/platform.rs:152,213` | `OpenAI.Codex_2p2nqsd0c76g0`, `OpenAI.Codex` | `doctor` verifies a package identity that will never be ours → false failures | remove these checks |
 | `cli/src/doctor/security.rs:69,71` | signer team `2DC432GLL2` | Verifies Apple/Windows signatures from OpenAI's cert | drop the check |
 | `cli/src/doctor/updates.rs:300` | `manifest.package_identity != "OpenAI.Codex"` | Auto-update identity check will always mismatch | remove/rewrite |
@@ -62,7 +65,7 @@ Grouped by where the user meets it, highest impact first:
 | Prompt scaffolding | `task_mentions.rs:35,268`, `user_prompt.rs:8`, `goal_files.rs:18` | `"## My request for Codex:"` |
 
 That last row matters more than it looks: prompt scaffolding is *part of the protocol*
-between our client and whatever model is behind `zenithal-providers`. Changing it changes
+between our client and whatever model is behind `stoic-codex-providers`. Changing it changes
 model behaviour, so it belongs in the same PR as a cassette/test update, not a bulk sed.
 
 ## Category C — leave alone
@@ -79,14 +82,14 @@ Do **not** rename these; each one is either upstream's property or a false posit
 
 ## The right way to do this
 
-1. `zenithal-brand` (already in `zenithal/brand/`) holds every string and URL. 5 tests, all green,
+1. `stoic-codex-brand` (already in `stoic-codex/brand/`) holds every string and URL. 5 tests, all green,
    including one that fails if any user-facing URL points at `openai.com`, `chatgpt.com`,
    `oaistatic.com` or `openai/codex`.
 2. `rebrand/apply-rebrand.sh` applies Category A mechanically and idempotently, with
    `--dry-run` default and `--check` for CI.
 3. Category B is a review task, not a script: 185 strings across 40 files, and the prompt
    scaffolding needs test updates alongside.
-4. Copy the `zenithal-brand` test into `codex-rs/tui` as an integration test so a rebase can
+4. Copy the `stoic-codex-brand` test into `codex-rs/tui` as an integration test so a rebase can
    never silently reintroduce OpenAI URLs. That single test is what keeps the rebrand true
    six months from now.
 

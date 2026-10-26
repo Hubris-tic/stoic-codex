@@ -1,4 +1,4 @@
-//! # zenithal-providers
+//! # stoic-codex-providers
 //!
 //! Provider-agnostic wire layer for the fork's BYOK requirement.
 //!

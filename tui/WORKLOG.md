@@ -6,8 +6,8 @@ fork could damage or mislead its own users.
 Apply it:
 
 ```bash
-cd zenithal
-git apply /path/to/zenithal/patches/0001-zenithal-tui-brand.patch
+cd stoic-codex
+git apply /path/to/stoic-codex/patches/0001-stoic-codex-tui-brand.patch
 cargo check -p codex-tui -p codex-cli     # needs a machine that can build ~2.1M LOC
 cargo test  -p codex-tui --test brand_urls
 ```
@@ -52,12 +52,12 @@ and rendered it in the UI. Your fork would display OpenAI's messaging as its own
 Repointed to our repo; `announcement_tip.toml` is included in the patch with a first
 (first-party) announcement. An empty `ANNOUNCEMENT_TIP_URL` now disables the feature.
 
-### 3. `zenithal app` installed OpenAI's signed desktop binary
+### 3. `stoic-codex app` installed OpenAI's signed desktop binary
 
 `cli/src/app_cmd.rs` → `desktop_app/mac.rs` downloaded
 `persistent.oaistatic.com/codex-app-prod/Codex.dmg` (and the Windows MSIX `OpenAI.Codex`)
 and installed it. Disabled with a clear error pointing at our tracker; the dead module is
-kept compiling but marked `zenithal:allow-upstream-url` and is unreachable.
+kept compiling but marked `stoic-codex:allow-upstream-url` and is unreachable.
 
 ### 4. Bug reports and update notices sent users upstream
 
@@ -66,11 +66,11 @@ kept compiling but marked `zenithal:allow-upstream-url` and is unreachable.
   upstream release notes
 - `doctor` printed `npm install -g @openai/codex` as the remediation
 
-All repointed at `Hubris-tic/zenithal`.
+All repointed at `Hubris-tic/stoic-codex`.
 
 ## Identity changes (20 strings)
 
-Onboarding heading, session header, `Zenithal (vX.Y.Z)` version line, status-line and
+Onboarding heading, session header, `Stoic Codex (vX.Y.Z)` version line, status-line and
 terminal-title labels, composer placeholder, four `/help` descriptions, upgrade banner,
 daemon hint.
 
@@ -87,7 +87,7 @@ tiers of pattern:
   (billing banners, `help.openai.com` articles) plus deliberate security policy
   (`exec_server_command.rs` restricts credentials to `openai.com`/`openai.org` hosts).
 
-A `zenithal:allow-upstream-url` comment (looked for up to 3 lines above) is an explicit,
+A `stoic-codex:allow-upstream-url` comment (looked for up to 3 lines above) is an explicit,
 auditable exception. Every current one is annotated with why it is inert.
 
 Why two tiers: a guard that fails on cosmetic debt gets disabled within a month. A guard
@@ -106,11 +106,11 @@ that fails only on "this could install someone else's software" survives.
 
 | Task | Why it needs a real compiler |
 |---|---|
-| Rename `[[bin]] name = "codex"` → `zenithal` | tests may reference `CARGO_BIN_EXE_codex` |
-| Config home `~/.codex` → `~/.zenithal` with fallback | touches `find_codex_home` call sites |
+| Rename `[[bin]] name = "codex"` → `stoic-codex` | tests may reference `CARGO_BIN_EXE_codex` |
+| Config home `~/.codex` → `~/.stoic-codex` with fallback | touches `find_codex_home` call sites |
 | Delete `desktop_app` + doctor signature checks outright | needs the module graph to stay consistent |
 | Prompt scaffolding (`## My request for Codex:`) | changes model behaviour → cassette updates |
-| Wire `zenithal-brand` constants in place of literals | mechanical, but `cargo check` should drive it |
+| Wire `stoic-codex-brand` constants in place of literals | mechanical, but `cargo check` should drive it |
 
 ## Next TUI work, in order
 
@@ -128,13 +128,13 @@ that fails only on "this could install someone else's software" survives.
 
 | Path | What it is | Verified |
 |---|---|---|
-| `zenithal/ui-core/` | pure view-model logic: diff engine, mission state machine, graph layout | **32 tests pass**, 0 warnings |
-| `zenithal/tui/src/theme.rs` | the palette: red + black first, everything else punctuation | 4 tests |
-| `zenithal/tui/src/chrome.rs` | the shared frame: mark, tabs, one rule, one footer | 9 tests |
-| `zenithal/tui/views/` | ratatui views: `diff_review`, `mission_board`, `memory_graph` | **compiles against ratatui 0.29**, 37 tests pass |
-| `zenithal/tui/preview/*.png` | **real renders** of the views (see "Preview, not mockup") | 1220×644 each |
-| `zenithal/tui/examples/snapshot.rs` | draws the views into ratatui's `TestBackend` and dumps cells | `cargo run --example snapshot` |
-| `zenithal/tui/render_preview.py` | rasterises that cell dump with a monospace font | runs in ~1s |
+| `stoic-codex/ui-core/` | pure view-model logic: diff engine, mission state machine, graph layout | **32 tests pass**, 0 warnings |
+| `stoic-codex/tui/src/theme.rs` | the palette: red + black first, everything else punctuation | 4 tests |
+| `stoic-codex/tui/src/chrome.rs` | the shared frame: mark, tabs, one rule, one footer | 9 tests |
+| `stoic-codex/tui/views/` | ratatui views: `diff_review`, `mission_board`, `memory_graph` | **compiles against ratatui 0.29**, 37 tests pass |
+| `stoic-codex/tui/preview/*.png` | **real renders** of the views (see "Preview, not mockup") | 1220×644 each |
+| `stoic-codex/tui/examples/snapshot.rs` | draws the views into ratatui's `TestBackend` and dumps cells | `cargo run --example snapshot` |
+| `stoic-codex/tui/render_preview.py` | rasterises that cell dump with a monospace font | runs in ~1s |
 
 **Total in these crates: 40 tests, 0 warnings.** Whole project now: **96 tests**.
 
@@ -191,7 +191,7 @@ half-separator coloured pixels nobody asked for.
 
 ## Wiring into the fork (next commit, needs a real build)
 
-`zenithal/tui/views/` becomes `codex-rs/tui/src/views/` and `zenithal-ui-core` becomes a
+`stoic-codex/tui/views/` becomes `codex-rs/tui/src/views/` and `stoic-codex-ui-core` becomes a
 workspace member:
 
 ```rust
@@ -200,7 +200,7 @@ mod views;                       // new module, no upstream file restructured
 pub use views::{diff_review, memory_graph, mission_board};
 ```
 
-Add to `codex-rs/tui/Cargo.toml`: `zenithal-ui-core = { path = "../zenithal-ui-core" }`, and
+Add to `codex-rs/tui/Cargo.toml`: `stoic-codex-ui-core = { path = "../stoic-codex-ui-core" }`, and
 match the workspace's pinned `ratatui` version (this crate used 0.29; if the workspace is
 newer, adjust `Borders`/`Block` APIs accordingly).
 
@@ -236,7 +236,7 @@ the agents it commands. Counts above are the current ones (ui-core 32, views 18)
 
 ## Addendum — the black hole (patch 0002)
 
-The product is `Zenithal`, and the identity is a black hole: a void that absorbs light, an
+The product is `Stoic Codex`, and the identity is a black hole: a void that absorbs light, an
 accretion disk at the hot end of red, and the cold blue of the light that escaped. This
 addendum is what that cost and what it bought.
 
@@ -292,7 +292,7 @@ of an integrated image.
 ### What is on the screen now
 
 The header carries a fourth tab, `hole`, and the mark became the sigil (`◍`): the product
-name is `Zenithal`, one word, no "code" in it anywhere. The frame's tab cells gained their
+name is `Stoic Codex`, one word, no "code" in it anywhere. The frame's tab cells gained their
 separator so an active tab can never fuse to the one before it (`memory▸ hole` was a bug, not
 a style), and a narrow terminal now drops tabs from the end before it drops the mark.
 
@@ -303,7 +303,7 @@ the same thing live in a terminal.
 
 ### Counts
 
-`zenithal-tui-views` went from 37 tests to **53**: palette invariants, the heat ramp, tab
+`stoic-codex-tui-views` went from 37 tests to **53**: palette invariants, the heat ramp, tab
 geometry with four tabs, and the black hole's own properties — the shadow is a hole in the
 middle of the frame, the disk is traced inside the physics' own radii, a photon ring wraps the
 shadow, the heat falls off outward from the Shakura–Sunyaev peak, the star field is sparse and
@@ -344,7 +344,7 @@ the EHT image does.
 Three new tests hold this down: the picture must actually change between two clock values
 (more than 10% of lit cells, fewer than 95% — the second bound rejects noise), the photon ring
 must not hold one colour over a full turn, and the jets must flicker *and* stay within two
-cells of the spin axis. `zenithal-tui-views` is now at **53**.
+cells of the spin axis. `stoic-codex-tui-views` is now at **53**.
 
 ## The animation, third pass: things that move, not things that pulse
 
@@ -384,7 +384,7 @@ Measured cost of all of it: **zero**. The geometry is still traced once per term
 cached; a frame is a few thousand sines. The `hot_spot` and `outer_fade` maths are `exp` on
 numbers already in a register.
 
-`zenithal-tui-views` is now at **60** tests: the clock clamps, a spinner advances and a settled
+`stoic-codex-tui-views` is now at **60** tests: the clock clamps, a spinner advances and a settled
 state never spins, the feed flashes and fades, the hot spot is bright on its own azimuth and
 dark half a turn away, the rim outshines the disk behind it, and the outer edge reaches exactly
 zero.

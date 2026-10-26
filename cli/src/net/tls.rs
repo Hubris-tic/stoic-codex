@@ -1,6 +1,6 @@
 //! TLS for the real transport: rustls + the operating system trust store.
 //!
-//! Local-first does not mean unencrypted. A user pointing `zenithal` at their own machine
+//! Local-first does not mean unencrypted. A user pointing `stoic-codex` at their own machine
 //! uses `http://127.0.0.1`, but the moment the endpoint is a hosted provider the
 //! connection must still be authenticated — otherwise BYOK would mean "send my key in
 //! plaintext". No certificate pinning, no custom root store, no disabling verification:

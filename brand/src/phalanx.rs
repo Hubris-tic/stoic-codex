@@ -1,4 +1,4 @@
-//! The Phalanx: the short-hand system codes that name Zenithal's executing agents.
+//! The Phalanx: the short-hand system codes that name Stoic Codex's executing agents.
 //!
 //! Under **Strategos** there is exactly one kind of subordinate: a *short-hand system code*.
 //! Not a person, not a persona — an operational slot with a name short enough to survive a

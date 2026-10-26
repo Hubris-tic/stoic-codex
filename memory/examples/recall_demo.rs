@@ -2,7 +2,7 @@
 //! breakdown, so the memory layer can be inspected without a server, an API key, or a
 //! model. `cargo run --example recall_demo`.
 
-use zenithal_memory::{
+use stoic_codex_memory::{
     EdgeKind, MemoryEdge, MemoryError, MemoryNode, MemoryStore, NodeKind, Query,
 };
 

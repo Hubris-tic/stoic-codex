@@ -1,11 +1,11 @@
-◍ zenithal  │ ▸ mission   diff   memory   hole                                                         on main   ● 1 running   $1.20
+◍ Stoic Codex  │ ▸ mission   diff   memory   hole                                                      on main   ● 1 running   $1.20
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
     CODE          BRANCH               CONTEXT    RESULT     ASSIGNMENT           │                                                 
 ▏ ✓ Strategos     —                    ▰▰▰▰▰▰▰▰▰▰ done       replace sha256 with …│ ✓  Strategos                                    
   ────────────────────────────────────────────────────────────────────────────────│ ──────────────────────────────────────────────  
-  ✗ x5-patch      zenithal/x5-patch    ▰▰▰▱▱▱▱▱▱▱ rejected   rewrite the error ma…│                                                 
-  ⠋ x7-trace      zenithal/x7-trace    ▰▰▰▰▰▰▱▱▱▱ running    rotate the signing k…│ assignment replace sha256 with argon2 and fix…  
-  ✓ x1-write      zenithal/x1-write    ▰▰▰▰▰▰▰▰▰▰ accepted   hash and verify with…│ tools      none — it plans and reviews          
+  ✗ x5-patch      stoic-codex/x5-patch ▰▰▰▱▱▱▱▱▱▱ rejected   rewrite the error ma…│                                                 
+  ⠋ x7-trace      stoic-codex/x7-trace ▰▰▰▰▰▰▱▱▱▱ running    rotate the signing k…│ assignment replace sha256 with argon2 and fix…  
+  ✓ x1-write      stoic-codex/x1-write ▰▰▰▰▰▰▰▰▰▰ accepted   hash and verify with…│ tools      none — it plans and reviews          
 ──────────────────────────────────────────────────────────────────────────────────│ role       commander of the Operator            
  ACTIVITY                                                                         │ tokens     12k in / 1.8k out                    
  00:00 ◈             planning the mission                                         │                                                 
@@ -13,9 +13,9 @@
  00:02 ◈ x1-write    slot-1 → x1-write · the primary logic generator              │ base       main                                 
  00:02 ◈ x7-trace    slot-2 → x7-trace · the diagnostics and debugging rig        │ plan       3 assignments                        
  00:02 ◈ x5-patch    slot-3 → x5-patch · the surgical edit unit                   │ applied    1 accepted · 1 rejected              
- 00:03 → x1-write    deployed on zenithal/x1-write                                │ budget     $1.20 of $3.00                       
- 00:03 → x7-trace    deployed on zenithal/x7-trace                                │                                                 
- 00:04 → x5-patch    deployed on zenithal/x5-patch                                │                                                 
+ 00:03 → x1-write    deployed on stoic-codex/x1-write                             │ budget     $1.20 of $3.00                       
+ 00:03 → x7-trace    deployed on stoic-codex/x7-trace                             │                                                 
+ 00:04 → x5-patch    deployed on stoic-codex/x5-patch                             │                                                 
  00:08 · x1-write    write_file src/auth.rs                                       │                                                 
  00:11 ╵ x1-write    ok write_file (2ms) 41 lines                                 │                                                 
  00:14 · x7-trace    search "sleep(Duration" src/                                 │                                                 

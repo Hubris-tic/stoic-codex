@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn a_conversation_costs_more_than_its_text_alone() {
         let messages = vec![
-            ("system".to_string(), "you are zenithal".to_string()),
+            ("system".to_string(), "you are stoic-codex".to_string()),
             ("user".to_string(), "hello".to_string()),
         ];
         let text: usize = messages

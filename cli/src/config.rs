@@ -1,4 +1,4 @@
-//! `~/.zenithal/config.json` — small, hand-editable, and never required.
+//! `~/.stoic-codex/config.json` — small, hand-editable, and never required.
 //!
 //! Every field has a default, so a missing or partial file is normal. Unknown keys are
 //! rejected: a typo like `"contxt_budget"` should not be silently ignored, because the
@@ -54,6 +54,7 @@ fn default_address() -> String {
     "127.0.0.1:1729".into()
 }
 fn default_database() -> String {
+    // Keep the historical TypeDB database identifier so this rebrand does not orphan data.
     "zenithal_memory".into()
 }
 fn default_budget() -> usize {
@@ -169,9 +170,9 @@ impl Config {
                 ))
             }
         }
-        if !zenithal_memory::daemon::is_loopback(&self.memory.daemon_address) {
+        if !stoic_codex_memory::daemon::is_loopback(&self.memory.daemon_address) {
             return Err(format!(
-                "memory.daemon_address `{}` is not loopback — Zenithal memory is local-only",
+                "memory.daemon_address `{}` is not loopback — Stoic Codex memory is local-only",
                 self.memory.daemon_address
             ));
         }
@@ -188,7 +189,7 @@ mod tests {
 
     fn temp(tag: &str) -> std::path::PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("zenithal-config-{tag}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("stoic-codex-config-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("config.json")
@@ -199,6 +200,7 @@ mod tests {
         let path = temp("missing");
         let cfg = Config::load(&path).unwrap();
         assert_eq!(cfg.memory.backend, "auto");
+        assert_eq!(cfg.memory.database, "zenithal_memory");
         assert!(cfg.memory.allow_daemon);
         assert_eq!(cfg.memory.context_budget, 1200);
     }

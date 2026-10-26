@@ -7,7 +7,7 @@
 //! Geometry, on a wide terminal:
 //!
 //! ```text
-//!  ◍ zenithal  │ ▸ mission  diff  memory  hole            on main  ● 2 running  $1.20
+//!  ◍ Stoic Codex  │ ▸ mission  diff  memory  hole            on main  ● 2 running  $1.20
 //!  ─────────────                          ──────────────────────────────────────────
 //!  ...body, whatever the active view draws...
 //!  ─────────────────────────────────────────────────────────────────────────────────
@@ -150,9 +150,9 @@ pub fn layout(area: Rect) -> (Option<Rect>, Rect, Option<Rect>) {
 ///
 /// The header and the rule both use this, so the red underline is *by construction* under
 /// the label it belongs to rather than by two `format!` strings happening to agree.
-/// `◍ zenithal` is 11 columns, then `  │  ` … see [`tab_offsets`]. Computed rather than
-/// guessed: the header and the rule both read it, so they cannot disagree.
-const TAB_ORIGIN: usize = 14;
+/// `◍ ` (2) + `Stoic Codex` (11) + `  │ ` (4) puts the first tab at column 17. Computed
+/// rather than guessed: the header and the rule both read it, so they cannot disagree.
+const TAB_ORIGIN: usize = 17;
 
 fn tab_offsets(tabs: &[&str]) -> Vec<(usize, usize)> {
     let mut out = Vec::with_capacity(tabs.len());
@@ -177,7 +177,7 @@ fn tab_cell_len(index: usize, label: &str) -> usize {
 pub fn header<'a>(chrome: &Chrome<'_>, width: u16) -> Line<'static> {
     let mut spans = vec![
         Span::styled("◍ ", theme::mark()),
-        Span::styled("zenithal", theme::title()),
+        Span::styled("Stoic Codex", theme::title()),
         Span::styled("  │ ", theme::rule()),
     ];
     for (i, tab) in chrome.tabs.iter().enumerate() {
@@ -324,7 +324,7 @@ mod tests {
     fn the_header_names_the_product_and_every_tab() {
         let line = header(&chrome(TAB_MISSION), 140);
         let text = text_of(&line);
-        assert!(text.starts_with("◍ zenithal"), "{text}");
+        assert!(text.starts_with("◍ Stoic Codex"), "{text}");
         for tab in TABS {
             assert!(text.contains(tab), "tab {tab} missing from {text}");
         }

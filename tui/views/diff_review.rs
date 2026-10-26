@@ -1,6 +1,6 @@
 //! Diff review: a file rail on the left, side-by-side hunks on the right.
 //!
-//! The interesting decisions live in `zenithal_ui_core::diff` (hunk pairing, folding); this
+//! The interesting decisions live in `stoic_codex_ui_core::diff` (hunk pairing, folding); this
 //! module positions them. Layout: `│ old# │ old text ┃ new# │ new text │`, with the changed
 //! characters marked inline.
 //!
@@ -9,7 +9,7 @@
 //! is a single quiet hue so the eye can find it without the screen turning into a
 //! Christmas tree.
 
-use zenithal_ui_core::diff::{self, FileDiff, LineKind, SideCell, SideRow};
+use stoic_codex_ui_core::diff::{self, FileDiff, LineKind, SideCell, SideRow};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};

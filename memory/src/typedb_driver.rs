@@ -58,7 +58,7 @@ impl LocalTypeDb {
     pub fn connect(address: &str, database: &str) -> Result<Self> {
         if !is_loopback(address) {
             return Err(MemoryError::Invalid(format!(
-                "refusing to connect to `{address}`: Zenithal memory is local-only \
+                "refusing to connect to `{address}`: Stoic Codex memory is local-only \
                  (use 127.0.0.1:<port>). Hosting a graph database is not required by this design."
             )));
         }
@@ -427,7 +427,7 @@ fn now() -> i64 {
 }
 
 /// Sanity checks that need no server. The server-backed behaviour is covered by
-/// `tests/typedb_live.rs`, which only runs when `ZENITHAL_TYPEDB_ADDR` is set.
+/// `tests/typedb_live.rs`, which only runs when `STOIC_CODEX_TYPEDB_ADDR` is set.
 #[cfg(test)]
 mod tests {
     use super::*;

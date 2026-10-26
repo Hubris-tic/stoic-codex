@@ -155,8 +155,8 @@ impl Tool for RunCommand {
                 .as_nanos()
         );
         let dir = std::env::temp_dir();
-        let out_path = dir.join(format!("zenithal-cmd-{stamp}.out"));
-        let err_path = dir.join(format!("zenithal-cmd-{stamp}.err"));
+        let out_path = dir.join(format!("stoic-codex-cmd-{stamp}.out"));
+        let err_path = dir.join(format!("stoic-codex-cmd-{stamp}.err"));
         let (Ok(out_file), Ok(err_file)) = (
             std::fs::File::create(&out_path),
             std::fs::File::create(&err_path),
@@ -275,7 +275,7 @@ mod tests {
 
     fn sandbox() -> (Arc<Sandbox>, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!(
-            "zenithal-shell-{}-{:?}",
+            "stoic-codex-shell-{}-{:?}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

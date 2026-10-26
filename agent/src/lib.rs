@@ -1,6 +1,6 @@
-//! # zenithal-agent
+//! # stoic-codex-agent
 //!
-//! The half of Zenithal that acts: a tool-calling loop, the tools, and a squad of agents
+//! The half of Stoic Codex that acts: a tool-calling loop, the tools, and a squad of agents
 //! commanded by one of their own — **Strategos** plans and reviews, the **Operator** execute
 //! in isolated git worktrees, and nothing reaches your branch unreviewed.
 //!
@@ -33,7 +33,7 @@
 //!
 //! Two deliberate absences:
 //!
-//! * **No vendor code.** The loop speaks `zenithal_providers`' canonical IR; every wire
+//! * **No vendor code.** The loop speaks `stoic_codex_providers`' canonical IR; every wire
 //!   difference is in an adapter.
 //! * **No hidden I/O policy.** Filesystem access goes through `Sandbox`, the shell is
 //!   opt-in with an allow list, and git writes belong to `worktree.rs` — the orchestrator —
@@ -59,5 +59,5 @@ pub use tool::{Tool, ToolOutcome, ToolRegistry};
 pub use worktree::{FileChange, GitError, Repo, Worktree};
 
 /// The module is called `loop`, which is a keyword; this alias keeps the import readable
-/// (`zenithal_agent::r#loop` vs `zenithal_agent::loop_`) without renaming the concept.
+/// (`stoic_codex_agent::r#loop` vs `stoic_codex_agent::loop_`) without renaming the concept.
 pub use loop_ as agent_loop;

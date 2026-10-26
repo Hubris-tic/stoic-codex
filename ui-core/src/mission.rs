@@ -1,6 +1,6 @@
 //! Mission board view model: Strategos, the Phalanx, their states, budgets, and what to show.
 //!
-//! The shape mirrors `zenithal-agent`'s orchestrator on purpose: one **Strategos** (the boss —
+//! The shape mirrors `stoic-codex-agent`'s orchestrator on purpose: one **Strategos** (the boss —
 //! it plans and it judges, and it touches no files) and N operators that together are **the
 //! Phalanx**, each named by a short-hand system code (`x0-core`, `x1-write`, `x2-check`,
 //! `x3-ship`, …) because the code *is* the job. Each gets one git worktree and does different
@@ -142,7 +142,7 @@ pub struct Agent {
     pub role: AgentRole,
     pub state: AgentState,
     pub model: String,
-    /// The Operator's own branch (`zenithal/<slug>`). Always `None` for Strategos.
+    /// The Operator's own branch (`stoic-codex/<slug>`). Always `None` for Strategos.
     pub branch: Option<String>,
     pub worktree: Option<String>,
     pub task: String,
@@ -312,7 +312,7 @@ pub fn slot_name(n: usize) -> String {
 
 /// The catalogue of codes, re-exported so a view can say what a code means without a second
 /// copy of the table.
-pub use zenithal_brand::phalanx;
+pub use stoic_codex_brand::phalanx;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MissionError {
@@ -417,7 +417,7 @@ impl Mission {
             .iter()
             .filter(|(old, code)| old != code)
             .map(|(old, code)| {
-                let meaning = zenithal_brand::phalanx::lookup(code)
+                let meaning = stoic_codex_brand::phalanx::lookup(code)
                     .map(|c| format!("{} · {}", c.id, c.role))
                     .unwrap_or_else(|| code.clone());
                 Activity::new(
@@ -672,7 +672,7 @@ mod tests {
 
     #[test]
     fn the_strategos_row_is_pinned_to_the_top_whatever_the_state() {
-        let mut m = Mission::new("refactor-auth", "zenithal");
+        let mut m = Mission::new("refactor-auth", "stoic-codex");
         m.push(agent("x1-write", AgentRole::Operator, AgentState::WaitingApproval));
         m.push(agent("x2-check", AgentRole::Operator, AgentState::Failed));
         m.push(agent("Strategos", AgentRole::Strategos, AgentState::Running));
@@ -831,14 +831,14 @@ mod tests {
 
     #[test]
     fn naming_the_phalanx_keeps_a_rows_history_and_moves_its_branch() {
-        let mut m = Mission::deploy("fix the parser", "zenithal", 2, "fix the parser");
+        let mut m = Mission::deploy("fix the parser", "stoic-codex", 2, "fix the parser");
         let ids: Vec<String> = m.operators().iter().map(|a| a.id.clone()).collect();
         assert_eq!(ids, vec!["slot-1".to_string(), "slot-2".to_string()]);
 
         // Work already in flight when the naming lands.
         if let Some(a) = m.agents.iter_mut().find(|a| a.id == "slot-1") {
-            a.branch = Some("zenithal/slot-1".into());
-            a.worktree = Some(".git/zenithal-missions/slot-1".into());
+            a.branch = Some("stoic-codex/slot-1".into());
+            a.worktree = Some(".git/stoic-codex-missions/slot-1".into());
             a.input_tokens = 120;
             a.transition(AgentState::Running).unwrap();
         }
@@ -853,10 +853,10 @@ mod tests {
         assert_eq!(named.id, "x1-write");
         assert_eq!(named.state, AgentState::Running, "the row kept its state");
         assert_eq!(named.input_tokens, 120, "the row kept its spend");
-        assert_eq!(named.branch.as_deref(), Some("zenithal/x1-write"));
+        assert_eq!(named.branch.as_deref(), Some("stoic-codex/x1-write"));
         assert_eq!(
             named.worktree.as_deref(),
-            Some(".git/zenithal-missions/x1-write")
+            Some(".git/stoic-codex-missions/x1-write")
         );
         assert_eq!(m.operators()[1].id, "x2-check");
         // Strategos is never renamed.
@@ -865,7 +865,7 @@ mod tests {
 
     #[test]
     fn a_rename_that_changes_nothing_is_not_counted() {
-        let mut m = Mission::deploy("t", "zenithal", 1, "t");
+        let mut m = Mission::deploy("t", "stoic-codex", 1, "t");
         let same = vec![("slot-1".to_string(), "slot-1".to_string())];
         assert_eq!(m.name_phalanx(&same), 0);
         let unknown = vec![("slot-99".to_string(), "x1-write".to_string())];

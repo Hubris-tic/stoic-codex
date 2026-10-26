@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A fake OpenAI-compatible server, so `zenithal run` can be exercised with no model at all.
+"""A fake OpenAI-compatible server, so `stoic-codex run` can be exercised with no model at all.
 
 It streams a canned answer token by token, which is exactly what a local model does — so
 you can check streaming, usage accounting, memory write-back and `--dry-run` without
@@ -9,7 +9,7 @@ downloading a single weight.
 
 Then, in another terminal:
 
-    cat > ~/.zenithal/providers/lab.json <<'JSON'
+    cat > ~/.stoic-codex/providers/lab.json <<'JSON'
     {
       "id": "lab",
       "base_url": "http://127.0.0.1:8099",
@@ -19,8 +19,8 @@ Then, in another terminal:
     }
     JSON
 
-    zenithal providers add ~/.zenithal/providers/lab.json
-    zenithal run "what does my memory say about auth?" --provider lab --model tiny
+    stoic-codex providers add ~/.stoic-codex/providers/lab.json
+    stoic-codex run "what does my memory say about auth?" --provider lab --model tiny
 
 Every request is echoed to stderr so you can see exactly what the binary sent.
 """

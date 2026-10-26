@@ -1710,21 +1710,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
-name = "zenithal-agent"
+name = "stoic-codex-agent"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zenithal-brand",
- "zenithal-providers",
+ "stoic-codex-brand",
+ "stoic-codex-providers",
 ]
 
 [[package]]
-name = "zenithal-brand"
+name = "stoic-codex-brand"
 version = "0.1.0"
 
 [[package]]
-name = "zenithal-cli"
+name = "stoic-codex-cli"
 version = "0.1.0"
 dependencies = [
  "rustls",
@@ -1732,14 +1732,14 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "serde_json",
- "zenithal-agent",
- "zenithal-brand",
- "zenithal-memory",
- "zenithal-providers",
+ "stoic-codex-agent",
+ "stoic-codex-brand",
+ "stoic-codex-memory",
+ "stoic-codex-providers",
 ]
 
 [[package]]
-name = "zenithal-memory"
+name = "stoic-codex-memory"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -1748,7 +1748,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zenithal-providers"
+name = "stoic-codex-providers"
 version = "0.1.0"
 dependencies = [
  "serde",

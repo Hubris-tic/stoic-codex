@@ -1,4 +1,4 @@
-//! `zenithal mission` end to end: a real git repo, real worktrees, three Operator, one
+//! `stoic-codex mission` end to end: a real git repo, real worktrees, three Operator, one
 //! Strategos — over a real loopback socket.
 //!
 //! The only thing faked is the model. Everything else is the shipped code: the adapter, the
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use support::{openai_json, openai_tool_call, Stub};
-use zenithal_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
+use stoic_codex_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
 
 // ── a repository on disk ────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ struct Repo {
 impl Repo {
     fn new(tag: &str) -> Repo {
         let root =
-            std::env::temp_dir().join(format!("zenithal-mission-{tag}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("stoic-codex-mission-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let repo = Repo { root };
@@ -37,7 +37,7 @@ impl Repo {
             "-c",
             "user.name=Fixture",
             "-c",
-            "user.email=fixture@zenithal.invalid",
+            "user.email=fixture@stoic-codex.invalid",
             "commit",
             "-qm",
             "initial",
@@ -85,7 +85,7 @@ impl Repo {
 
 impl Drop for Repo {
     fn drop(&mut self) {
-        if std::env::var("ZENITHAL_TEST_KEEP").is_ok() {
+        if std::env::var("STOIC_CODEX_TEST_KEEP").is_ok() {
             eprintln!("kept {}", self.root.display());
             return;
         }
@@ -104,11 +104,11 @@ struct Rig {
 impl Rig {
     fn new(tag: &str, base_url: &str) -> Rig {
         let home = std::env::temp_dir().join(format!(
-            "zenithal-mission-home-{tag}-{}",
+            "stoic-codex-mission-home-{tag}-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&home);
-        let dir = home.join(".zenithal");
+        let dir = home.join(".stoic-codex");
         std::fs::create_dir_all(&dir).unwrap();
         let config = format!(
             r#"{{
@@ -117,13 +117,13 @@ impl Rig {
                 "default": "openai-chat",
                 "model": "test-model",
                 "base_url": "{base_url}",
-                "api_key_env": "ZENITHAL_MISSION_TEST_KEY",
+                "api_key_env": "STOIC_CODEX_MISSION_TEST_KEY",
                 "max_tokens": 512
               }}
             }}"#
         );
         std::fs::write(dir.join("config.json"), config).unwrap();
-        std::env::set_var("ZENITHAL_MISSION_TEST_KEY", "sk-test-not-a-real-key");
+        std::env::set_var("STOIC_CODEX_MISSION_TEST_KEY", "sk-test-not-a-real-key");
         let (ctx, buffers) = Ctx::buffered(home.clone());
         Rig { home, ctx, buffers }
     }
@@ -241,7 +241,7 @@ fn three_operators_land_three_files_and_one_commit() {
     // One commit for the whole mission, on top of the fixture's initial commit.
     let log = repo.log();
     assert_eq!(log.len(), 2, "expected one mission commit, got {log:?}");
-    assert!(log[0].starts_with("zenithal mission:"), "{}", log[0]);
+    assert!(log[0].starts_with("stoic-codex mission:"), "{}", log[0]);
     assert!(log[0].contains("3 file"), "{}", log[0]);
     assert!(repo.git(&["status", "--porcelain"]).trim().is_empty());
 
@@ -252,12 +252,12 @@ fn three_operators_land_three_files_and_one_commit() {
     }
     assert!(out.contains("Strategos"), "{out}");
     assert!(
-        !repo.exists(".git/zenithal-missions"),
+        !repo.exists(".git/stoic-codex-missions"),
         "worktrees were left behind"
     );
 
     // Every branch that landed is gone; none of the temporary ones linger.
-    let branches = repo.git(&["branch", "--list", "zenithal/*"]);
+    let branches = repo.git(&["branch", "--list", "stoic-codex/*"]);
     assert!(
         branches.trim().is_empty(),
         "branches left behind: {branches}"
@@ -374,7 +374,7 @@ fn a_rejected_operators_keeps_its_work_on_its_branch_and_out_of_the_tree() {
 
     // Rejected work is not lost: it stays on its branch, and only that branch survives —
     // the two that landed were already committed to the working tree.
-    let branches = repo.git(&["branch", "--list", "zenithal/*"]);
+    let branches = repo.git(&["branch", "--list", "stoic-codex/*"]);
     let survivors: Vec<&str> = branches
         .lines()
         .map(str::trim)
@@ -382,11 +382,11 @@ fn a_rejected_operators_keeps_its_work_on_its_branch_and_out_of_the_tree() {
         .collect();
     assert_eq!(
         survivors,
-        vec!["zenithal/x2-check"],
+        vec!["stoic-codex/x2-check"],
         "only the rejected Operator's branch should survive: {branches}"
     );
     assert!(repo
-        .git(&["show", "zenithal/x2-check:beta.txt"])
+        .git(&["show", "stoic-codex/x2-check:beta.txt"])
         .contains("beta"));
 
     assert!(rig.out().contains("rejected"), "{}", rig.out());
@@ -553,7 +553,7 @@ fn mission_plan_shows_the_assignments_and_changes_nothing() {
     // One call, no worktrees, no commits.
     assert_eq!(stub.join().len(), 1);
     assert_eq!(repo.log().len(), 1);
-    assert!(!repo.exists(".git/zenithal-missions"));
+    assert!(!repo.exists(".git/stoic-codex-missions"));
 }
 
 #[test]
@@ -748,7 +748,7 @@ fn a_verify_command_that_fails_rejects_the_work() {
 fn a_missing_provider_is_a_usage_error_before_anything_is_created() {
     let repo = Repo::new("no-provider");
     // A home with no config at all.
-    let home = std::env::temp_dir().join(format!("zenithal-mission-bare-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("stoic-codex-mission-bare-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).unwrap();
     let (mut ctx, buffers) = Ctx::buffered(home.clone());
@@ -760,17 +760,17 @@ fn a_missing_provider_is_a_usage_error_before_anything_is_created() {
     let code = run(&argv, &mut ctx);
 
     assert_eq!(code, USAGE, "{}", buffers.err());
-    assert!(!repo.exists(".git/zenithal-missions"));
+    assert!(!repo.exists(".git/stoic-codex-missions"));
     let _ = std::fs::remove_dir_all(&home);
 }
 
 #[test]
 fn mission_without_a_task_explains_itself() {
-    let (mut ctx, buffers) = Ctx::buffered(std::env::temp_dir().join("zenithal-mission-usage"));
+    let (mut ctx, buffers) = Ctx::buffered(std::env::temp_dir().join("stoic-codex-mission-usage"));
     let code = run(&["mission".into(), "run".into()], &mut ctx);
     assert_eq!(code, USAGE);
     assert!(
-        buffers.err().contains("usage: zenithal mission run"),
+        buffers.err().contains("usage: stoic-codex mission run"),
         "{}",
         buffers.err()
     );
@@ -778,7 +778,7 @@ fn mission_without_a_task_explains_itself() {
 
 #[test]
 fn the_help_text_describes_the_mission_shape() {
-    let (mut ctx, buffers) = Ctx::buffered(std::env::temp_dir().join("zenithal-mission-help"));
+    let (mut ctx, buffers) = Ctx::buffered(std::env::temp_dir().join("stoic-codex-mission-help"));
     let code = run(&["--help".into()], &mut ctx);
     assert_eq!(code, OK);
     let help = buffers.out();

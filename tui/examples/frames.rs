@@ -15,7 +15,7 @@ use std::path::Path;
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 use ratatui::{Frame, Terminal};
-use zenithal_tui_views::views::blackhole::{self, BlackHoleAnim};
+use stoic_codex_tui_views::views::blackhole::{self, BlackHoleAnim};
 
 /// A small frame: a GIF of a 132x34 screen is a 40 MB file, and the point is the motion.
 const W: u16 = 84;

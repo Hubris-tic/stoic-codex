@@ -1,8 +1,8 @@
 [package]
-name = "zenithal-memory"
+name = "stoic-codex-memory"
 version = "0.1.0"
 edition = "2021"
-description = "Zenithal: hybrid memory layer. Typed graph + vector retrieval behind one trait; TypeDB and SQLite are interchangeable backends."
+description = "Stoic Codex: hybrid memory layer. Typed graph + vector retrieval behind one trait; TypeDB and SQLite are interchangeable backends."
 license = "Apache-2.0"
 
 [dependencies]

@@ -1,4 +1,4 @@
-//! The bridge from `zenithal-agent`'s `Model` trait to a real provider over the network.
+//! The bridge from `stoic-codex-agent`'s `Model` trait to a real provider over the network.
 //!
 //! The agent loop asks for one complete response per turn; this type turns that into a
 //! `WireRequest` through the chosen adapter, puts it on a socket, and parses the answer
@@ -8,8 +8,8 @@
 use std::time::Duration;
 
 use serde_json::Value;
-use zenithal_agent::{Model, ModelError};
-use zenithal_providers::{
+use stoic_codex_agent::{Model, ModelError};
+use stoic_codex_providers::{
     adapter_for, AuthSpec, CanonicalRequest, CanonicalResponse, SseDecoder, WireAdapter,
 };
 
@@ -121,17 +121,17 @@ impl Model for RemoteModel {
             let mut decoder = self.adapter.stream_decoder(request);
             let mut sse = SseDecoder::new();
             let mut text = String::new();
-            let mut usage = zenithal_providers::Usage::default();
+            let mut usage = stoic_codex_providers::Usage::default();
             for frame in sse.push(&body) {
                 for event in decoder
                     .push_frame(&frame)
                     .map_err(|e| ModelError::Decode(e.to_string()))?
                 {
                     match event {
-                        zenithal_providers::CanonicalEvent::TextDelta { text: t } => {
+                        stoic_codex_providers::CanonicalEvent::TextDelta { text: t } => {
                             text.push_str(&t)
                         }
-                        zenithal_providers::CanonicalEvent::Usage { usage: u } => {
+                        stoic_codex_providers::CanonicalEvent::Usage { usage: u } => {
                             usage.merge_max(&u)
                         }
                         _ => {}
@@ -142,7 +142,7 @@ impl Model for RemoteModel {
                 .finish()
                 .map_err(|e| ModelError::Decode(e.to_string()))?
             {
-                if let zenithal_providers::CanonicalEvent::Usage { usage: u } = event {
+                if let stoic_codex_providers::CanonicalEvent::Usage { usage: u } = event {
                     usage.merge_max(&u);
                 }
             }
@@ -156,8 +156,8 @@ impl Model for RemoteModel {
             }
             return Ok(CanonicalResponse {
                 model: request.model.clone(),
-                content: vec![zenithal_providers::Content::text(text)],
-                stop_reason: zenithal_providers::StopReason::EndTurn,
+                content: vec![stoic_codex_providers::Content::text(text)],
+                stop_reason: stoic_codex_providers::StopReason::EndTurn,
                 usage,
             });
         }

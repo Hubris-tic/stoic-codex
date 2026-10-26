@@ -1,7 +1,7 @@
-# `zenithal-agent` — agents with tools, and the mission orchestrator
+# `stoic-codex-agent` — agents with tools, and the mission orchestrator
 
 The library that actually runs things: a tool loop, a sandbox, git worktrees, and the
-multi-agent orchestrator the rest of Zenithal is built around.
+multi-agent orchestrator the rest of Stoic Codex is built around.
 
 Two layers, and they are deliberately separate:
 
@@ -32,7 +32,7 @@ committee. One agent decides, three agents work, one agent judges.
      │ own tools     │  │ own tools     │  │ own tools     │    own model client
      └───────┬───────┘  └───────┬───────┘  └───────┬───────┘
              │ commit on        │                  │
-             │ zenithal/<code>  │                  │
+             │ stoic-codex/<code>  │                  │
              └─────────────────┼──────────────────┘
                                ▼
                       ┌─────────────────┐
@@ -42,7 +42,7 @@ committee. One agent decides, three agents work, one agent judges.
               accepted files copied into the working tree
               (whole file, first accepted writer wins)
                                ▼
-                   one commit: `zenithal mission: N file(s) …`
+                   one commit: `stoic-codex mission: N file(s) …`
 ```
 
 ### The rules that make it safe
@@ -55,7 +55,7 @@ committee. One agent decides, three agents work, one agent judges.
 - **Nothing is merged.** Accepted work is copied file-by-file with `Worktree::copy_file_to`.
   If two operators changed one file, the first accepted one wins and the other is reported
   as a `Conflict` — never silently blended.
-- **Rejected work is not lost.** It stays committed on `zenithal/<code>`; only branches whose
+- **Rejected work is not lost.** It stays committed on `stoic-codex/<code>`; only branches whose
   files actually landed are deleted.
 - **Git writes belong to the orchestrator.** No model-callable tool can commit, check out,
   or touch `.git`.
@@ -92,7 +92,7 @@ lands:
 | `x7-trace` | the diagnostics and debugging rig |
 
 The catalogue is `brand/src/phalanx.rs` — data, not strings scattered through the orchestrator,
-so `zenithal mission plan` and the TUI can print the same sentence the log does. The naming
+so `stoic-codex mission plan` and the TUI can print the same sentence the log does. The naming
 rules:
 
 - Strategos may name an operator itself (`"code": "x1-write"` in the plan JSON). If the code
@@ -103,12 +103,12 @@ rules:
 - The decision is emitted as `MissionEvent::Named { renames }`, so every consumer — the CLI log,
   the mission board, a future app shell — learns the codes from one event instead of guessing.
 - Codes are slugs (`x1-write` survives `slug()`), because the branch and the worktree directory
-  are named after them: `zenithal/x1-write`, `.git/zenithal-missions/x1-write`.
+  are named after them: `stoic-codex/x1-write`, `.git/stoic-codex-missions/x1-write`.
 
 ## Using it
 
 ```rust
-use zenithal_agent::{run_mission, AgentConfig, Operator, MissionConfig, Repo, VerifyCommand};
+use stoic_codex_agent::{run_mission, AgentConfig, Operator, MissionConfig, Repo, VerifyCommand};
 
 let repo = Repo::discover(".")?;
 let strategos = my_model("boss");
@@ -129,10 +129,10 @@ println!("{}", report.table());
 From the CLI:
 
 ```bash
-zenithal mission plan "add per-file retry budgets"     # one call: show the assignments
-zenithal mission run  "add per-file retry budgets"     # full mission, 3 operators by default
-zenithal mission run  "…" --agents 5 --verify "cargo test" --parallel 3
-zenithal mission run  "…" --no-review --no-commit      # look before you leap
+stoic-codex mission plan "add per-file retry budgets"     # one call: show the assignments
+stoic-codex mission run  "add per-file retry budgets"     # full mission, 3 operators by default
+stoic-codex mission run  "…" --agents 5 --verify "cargo test" --parallel 3
+stoic-codex mission run  "…" --no-review --no-commit      # look before you leap
 ```
 
 ## Layout
@@ -150,7 +150,7 @@ zenithal mission run  "…" --no-review --no-commit      # look before you leap
 ## Tests
 
 ```bash
-cd zenithal/agent && cargo test
+cd stoic-codex/agent && cargo test
 ```
 
 | Suite | Tests |
@@ -169,6 +169,6 @@ The end-to-end tests fake exactly one thing: the model. Everything else is real 
 
 - **No real model call in the tests.** Deliberate: the model layer is proven to the socket
   with scripted models, and the CLI's `RemoteModel` is what plugs a vendor in.
-- **The TUI board is a view, not a driver.** `zenithal/ui-core::mission` models exactly this
+- **The TUI board is a view, not a driver.** `stoic-codex/ui-core::mission` models exactly this
   orchestrator (Strategos pinned on top, the codes below) so the events map 1:1, but the
   terminal app that consumes them is a later milestone.

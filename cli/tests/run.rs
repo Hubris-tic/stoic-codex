@@ -1,4 +1,4 @@
-//! `zenithal run` end to end, over a real socket on loopback.
+//! `stoic-codex run` end to end, over a real socket on loopback.
 //!
 //! Every test here uses the shipped transport against a stub server: no key, no vendor, no
 //! network. The adapter is the real one (OpenAI-compatible), the SSE decoding is the real
@@ -7,7 +7,7 @@
 mod support;
 
 use support::{closed_port, error_body, openai_json, openai_sse, Stub};
-use zenithal_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
+use stoic_codex_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
 
 struct Rig {
     home: std::path::PathBuf,
@@ -17,9 +17,9 @@ struct Rig {
 
 impl Rig {
     fn new(tag: &str, config: &str) -> Rig {
-        let home = std::env::temp_dir().join(format!("zenithal-run-{tag}-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!("stoic-codex-run-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
-        let dir = home.join(".zenithal");
+        let dir = home.join(".stoic-codex");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("config.json"), config).unwrap();
         let (ctx, buffers) = Ctx::buffered(home.clone());
@@ -37,7 +37,7 @@ impl Rig {
                   "providers": {{
                     "default": "openai-chat",
                     "model": "test-model",
-                    "api_key_env": "ZENITHAL_TEST_KEY_{TAG}",
+                    "api_key_env": "STOIC_CODEX_TEST_KEY_{TAG}",
                     "base_url": "{base_url}"{extra}
                   }}
                 }}"#,
@@ -68,9 +68,14 @@ impl Drop for Rig {
 
 fn set_key(tag: &str, value: &str) {
     std::env::set_var(
-        format!("ZENITHAL_TEST_KEY_{}", tag.to_ascii_uppercase()),
+        format!("STOIC_CODEX_TEST_KEY_{}", tag.to_ascii_uppercase()),
         value,
     );
+}
+
+fn request_body(request: &str) -> serde_json::Value {
+    let (_, body) = request.split_once("\r\n\r\n").expect("HTTP body separator");
+    serde_json::from_str(body).expect("JSON request body")
 }
 
 #[test]
@@ -128,6 +133,7 @@ fn an_error_status_becomes_the_providers_own_message_and_changes_nothing() {
 
     assert_eq!(rig.run(&["run", "hello"]), FAILED);
     assert!(rig.err().contains("slow down"), "{}", rig.err());
+    assert!(!rig.home.join(".stoic-codex").join("sessions").exists());
 
     // A failed turn must not poison memory.
     assert_eq!(rig.run(&["memory", "recall", "hello"]), OK);
@@ -207,6 +213,7 @@ fn dry_run_prints_the_request_and_opens_no_socket() {
         out.contains("\"model\": \"test-model\""),
         "the body should be shown: {out}"
     );
+    assert!(!rig.home.join(".stoic-codex").join("sessions").exists());
 }
 
 #[test]
@@ -229,6 +236,90 @@ fn json_output_is_one_parseable_object() {
 }
 
 #[test]
+fn conversations_continue_and_resume_with_canonical_message_history() {
+    let stub = Stub::script(
+        "conversation",
+        vec![
+            openai_json("first answer"),
+            openai_json("second answer"),
+            openai_json("third answer"),
+        ],
+    );
+    let mut rig = Rig::pointed("conversation", &stub.base_url(), "");
+    set_key("conversation", "k");
+
+    assert_eq!(
+        rig.run(&["run", "first question", "--no-memory", "--json"]),
+        OK
+    );
+    let first: serde_json::Value = serde_json::from_str(&rig.out()).unwrap();
+    let session_id = first["session_id"].as_str().expect("session id").to_owned();
+
+    assert_eq!(
+        rig.run(&["run", "second question", "--continue", "--no-memory", "--json"]),
+        OK
+    );
+    let second: serde_json::Value = serde_json::from_str(&rig.out()).unwrap();
+    assert_eq!(second["session_id"].as_str(), Some(session_id.as_str()));
+
+    assert_eq!(
+        rig.run(&[
+            "run",
+            "third question",
+            "--resume",
+            &session_id,
+            "--no-memory",
+            "--json",
+        ]),
+        OK
+    );
+    let third: serde_json::Value = serde_json::from_str(&rig.out()).unwrap();
+    assert_eq!(third["session_id"].as_str(), Some(session_id.as_str()));
+
+    let requests = stub.join();
+    assert_eq!(requests.len(), 3);
+    let first_messages = request_body(&requests[0])["messages"].as_array().unwrap().clone();
+    let second_messages = request_body(&requests[1])["messages"].as_array().unwrap().clone();
+    let third_messages = request_body(&requests[2])["messages"].as_array().unwrap().clone();
+    assert_eq!(first_messages.len(), 2, "system plus first user turn");
+    assert_eq!(first_messages[0]["role"], "system");
+    assert_eq!(first_messages[1]["role"], "user");
+    assert_eq!(second_messages.len(), 4, "system plus one complete turn and the new user");
+    assert_eq!(third_messages.len(), 6, "system plus two complete turns and the new user");
+    assert_eq!(second_messages[1]["content"], "first question");
+    assert_eq!(second_messages[2]["content"], "first answer");
+    assert_eq!(second_messages[3]["content"], "second question");
+    assert_eq!(third_messages[3]["content"], "second question");
+    assert_eq!(third_messages[4]["content"], "second answer");
+    assert_eq!(third_messages[5]["content"], "third question");
+
+    // Context pruning affects only the request copy; the local transcript retains the whole
+    // conversation for a future model with a larger context window.
+    let paths = rig.home.join(".stoic-codex").join("sessions");
+    let saved: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(paths.join(format!("{session_id}.json"))).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(saved["messages"].as_array().unwrap().len(), 6);
+}
+
+#[test]
+fn no_session_disables_automatic_transcript_persistence() {
+    let stub = Stub::start(openai_json("no saved session"));
+    let mut rig = Rig::pointed("nosession", &stub.base_url(), "");
+    set_key("nosession", "k");
+
+    assert_eq!(
+        rig.run(&["run", "one-off", "--no-session", "--no-memory", "--json"]),
+        OK
+    );
+    let payload: serde_json::Value = serde_json::from_str(&rig.out()).unwrap();
+    assert!(payload["session_id"].is_null());
+    assert!(!rig.home.join(".stoic-codex").join("sessions").exists());
+    stub.join();
+}
+
+#[test]
 fn no_provider_selected_says_how_to_pick_one() {
     let mut rig = Rig::new("noprovider", r#"{"memory":{"backend":"file"}}"#);
     assert_eq!(rig.run(&["run", "hello"]), USAGE);
@@ -245,11 +336,11 @@ fn a_missing_credential_names_the_variable_to_set() {
     let stub = Stub::start(openai_sse(&["never"]));
     let mut rig = Rig::pointed("nokey", &stub.base_url(), "");
     // Deliberately do not set the key.
-    std::env::remove_var("ZENITHAL_TEST_KEY_NOKEY");
+    std::env::remove_var("STOIC_CODEX_TEST_KEY_NOKEY");
 
     assert_eq!(rig.run(&["run", "hello"]), FAILED);
     let err = rig.err();
-    assert!(err.contains("ZENITHAL_TEST_KEY_NOKEY"), "{err}");
+    assert!(err.contains("STOIC_CODEX_TEST_KEY_NOKEY"), "{err}");
     assert!(
         err.contains("auth"),
         "the escape hatch for keyless local servers: {err}"
@@ -270,7 +361,7 @@ fn a_provider_written_by_the_user_can_point_at_localhost_with_no_key() {
             }}"#
         ),
     );
-    let dir = rig.home.join(".zenithal").join("providers");
+    let dir = rig.home.join(".stoic-codex").join("providers");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("lab.json"),

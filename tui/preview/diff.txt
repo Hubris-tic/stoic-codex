@@ -1,4 +1,4 @@
-◍ zenithal  │   mission ▸ diff   memory   hole                                                                     on main   +7   -3
+◍ Stoic Codex  │   mission ▸ diff   memory   hole                                                                  on main   +7   -3
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  FILES                      │ src/auth.rs  +7 -3   [1/1]                                                                            
 ▏ src/auth.rs      +7 -3    │  41  pub fn verify(token: &str) -> bool {         │   41  pub fn verify(token: &str) -> bool {        

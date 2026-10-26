@@ -559,7 +559,7 @@ mod tests {
     impl Fixture {
         fn new(tag: &str) -> Fixture {
             let dir = std::env::temp_dir().join(format!(
-                "zenithal-fs-{tag}-{}-{:?}",
+                "stoic-codex-fs-{tag}-{}-{:?}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

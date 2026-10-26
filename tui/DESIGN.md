@@ -1,4 +1,4 @@
-# The Zenithal interface: a black hole, drawn in red
+# The Stoic Codex interface: a black hole, drawn in red
 
 A terminal UI lives or dies on two things: whether you can find the one thing that matters in
 a second, and whether the screen is calm enough to read for an hour. This is the ruleset that
@@ -65,7 +65,7 @@ colour, and the ramp has its own test.
 Every screen shares one frame, drawn by `src/chrome.rs`:
 
 ```
- ◍ zenithal  │ ▸ mission   diff   memory   hole              on main   ● 1 running   $1.20
+ ◍ Stoic Codex  │ ▸ mission   diff   memory   hole              on main   ● 1 running   $1.20
 ─────────────                          ────────────────────────────────────────────────
   ...body...
 ────────────────────────────────────────────────────────────────────────────────────────
@@ -161,11 +161,11 @@ The board answers three questions in one glance, top to bottom:
  CODE       BRANCH             CONTEXT      RESULT     ASSIGNMENT          │  ✓  Strategos
  ◆ Strategos —                 ▰▰▰▰▰▰▰▰▰▰ done       replace sha256 …    │  ─────────────
  ────────────────────────────────────────────────────────────────────────  │  assignment  …
- ▶ x7-trace  zenithal/x7-trace  ▰▰▰▰▰▰▱▱▱▱ running    rotate the key …   │  branch      …
- ✓ x1-write  zenithal/x1-write  ▰▰▰▰▰▰▰▰▰▰ accepted   hash and verify …  │  verdict     …
+ ▶ x7-trace  stoic-codex/x7-trace  ▰▰▰▰▰▰▱▱▱▱ running    rotate the key …   │  branch      …
+ ✓ x1-write  stoic-codex/x1-write  ▰▰▰▰▰▰▰▰▰▰ accepted   hash and verify …  │  verdict     …
  ACT                                                                      │  base        main
  00:02 ◈ x1-write  slot-1 → x1-write · the primary logic generator        │  plan        3 assign…
- 00:03 → x1-write  deployed on zenithal/x1-write                          │  applied     1 accepted…
+ 00:03 → x1-write  deployed on stoic-codex/x1-write                          │  applied     1 accepted…
  00:26 ! x5-patch  src/error.rs also written by x1-write; x1-write wins  │  budget      $1.20 of $3.00
  01:04 ●           1 file applied, 1 conflict reported                    │
 ```

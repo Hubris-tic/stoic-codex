@@ -1,6 +1,6 @@
-# Integrating `zenithal-providers` into Zenithal
+# Integrating `stoic-codex-providers` into Stoic Codex
 
-Zenithal is a hard fork, so you *can* edit upstream files freely. This document is still
+Stoic Codex is a hard fork, so you *can* edit upstream files freely. This document is still
 worth following literally: every change below is placed at a **seam**, so that a later
 rebase (or a change of heart about the fork strategy) is mechanical instead of a rewrite.
 The seam list is the map of which files to touch and what breaks if you get it wrong.
@@ -11,7 +11,7 @@ The seam list is the map of which files to touch and what breaks if you get it w
 codex-rs/
   providers/               <- copy of this crate, added to [workspace] members
   model-provider-info/     <- PATCH: provider registry gains a `wire` kind
-  model-provider/          <- PATCH: capabilities come from zenithal_providers
+  model-provider/          <- PATCH: capabilities come from stoic_codex_providers
   http-client/             <- PATCH: execute WireRequest, resolve AuthSpec
   config/                  <- PATCH: [[providers]] section
   core/                    <- PATCH: turn loop consumes CanonicalEvent
@@ -35,7 +35,7 @@ pub enum WireApi {
 
 // NEW
 impl ModelProviderInfo {
-    /// Which zenithal_providers adapter speaks this provider's protocol.
+    /// Which stoic_codex_providers adapter speaks this provider's protocol.
     pub fn wire_adapter_id(&self) -> &'static str {
         match self.wire_api {
             WireApi::Responses => "openai-responses",
@@ -51,15 +51,15 @@ one place that knows the relationship between "config value" and "adapter id".
 ## 2. `model-provider` — capabilities become data
 
 Upstream has `capabilities.rs` with per-provider assumptions. Replace those assumptions
-with `zenithal_providers::Capabilities`:
+with `stoic_codex_providers::Capabilities`:
 
 ```rust
 // codex-rs/model-provider/src/capabilities.rs
-pub use zenithal_providers::capabilities::{Capabilities, Feature, Needs};
+pub use stoic_codex_providers::capabilities::{Capabilities, Feature, Needs};
 
 pub fn capabilities_for(provider_id: &str, model: &str) -> Capabilities {
     // 1. adapter default   2. registry override from config   3. explicit user override
-    zenithal_providers::adapter_for(provider_id)
+    stoic_codex_providers::adapter_for(provider_id)
         .map(|a| /* adapter's declared caps */)
         .unwrap_or_default()
 }
@@ -73,7 +73,7 @@ carry them in `Preset::to_adapter`).
 
 ```rust
 // codex-rs/http-client/src/wire.rs
-use zenithal_providers::{AuthSpec, WireRequest};
+use stoic_codex_providers::{AuthSpec, WireRequest};
 
 pub async fn execute(client: &reqwest::Client, req: WireRequest, auth: &dyn AuthStore)
     -> Result<impl Stream<Item = Result<Bytes>>>
@@ -107,7 +107,7 @@ retry forever.
 ## 4. `config` — user-facing BYOK
 
 ```toml
-# ~/.zenithal/config.toml
+# ~/.stoic-codex/config.toml
 [model_providers.anthropic]
 wire        = "anthropic"            # adapter id; see `provider_ids()`
 base_url    = "https://api.anthropic.com"
@@ -125,7 +125,7 @@ classify  = "gemini:flash"
 prefer_local_for = ["**/secrets/**", "**/.env*"]
 ```
 
-`[routing]` maps straight onto `zenithal_providers::Router` + `TaskClass`; the
+`[routing]` maps straight onto `stoic_codex_providers::Router` + `TaskClass`; the
 `prefer_local_for` glob list is the privacy feature that makes BYOK worth having.
 
 ## 5. `core` — consume canonical events
@@ -134,7 +134,7 @@ The turn loop currently streams vendor events into `protocol::ResponseItem`. Ins
 adapter boundary and keep producing the same items, so nothing downstream changes:
 
 ```rust
-let adapter = zenithal_providers::adapter_for(provider.wire_id())?;
+let adapter = stoic_codex_providers::adapter_for(provider.wire_id())?;
 let wire = adapter.build_request(&canonical_from_history(&history, &turn))?;
 let body = http_client::execute(&client, wire, &auth).await?;
 

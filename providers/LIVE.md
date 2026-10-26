@@ -18,9 +18,9 @@ called. Dollar figures below are rate-card estimates, not billing-console amount
 | `GET /v1beta/models` | 200 — 47 models, including ids we had never seen (`gemini-3.8-flash`, `gemini-4-argon`, `gemini-3.1-flash-lite`) |
 | `generateContent` | 200 — 1.6 s, `usageMetadata` with `promptTokenCount: 8, candidatesTokenCount: 1` |
 | `streamGenerateContent?alt=sse` | 200 — 0.8 s, three `data:` frames, usage in every frame, `finishReason` only in the last |
-| `zenithal run "…"` (our binary, our adapter, our transport) | 200 — streamed answer, `152 ms`–`13.7 s` depending on the moment, `$0.000045` for 154 in / 4 out |
-| `zenithal agent run "read src/auth.rs…"` (two turns, one tool) | **success** — the model called `read_file`, got the result, answered |
-| `zenithal agent run "edit hash()…"` (four turns, three tools) | **success** — read → `edit_file` → read back → answer, file correct on disk |
+| `stoic-codex run "…"` (our binary, our adapter, our transport) | 200 — streamed answer, `152 ms`–`13.7 s` depending on the moment, `$0.000045` for 154 in / 4 out |
+| `stoic-codex agent run "read src/auth.rs…"` (two turns, one tool) | **success** — the model called `read_file`, got the result, answered |
+| `stoic-codex agent run "edit hash()…"` (four turns, three tools) | **success** — read → `edit_file` → read back → answer, file correct on disk |
 
 The last two are the milestone: the first time this project has done real, agentic, multi-turn
 work against a live vendor, with a real tool loop, through the shipped binary.
@@ -160,7 +160,7 @@ different vendor: these constants describe Gemini's vocabulary, not the concept 
 export GEMINI_API_KEY=…            # never write this into a file that can be committed
 cargo test --test live_gemini -- --ignored --test-threads=1
 # or against a different model:
-ZENITHAL_LIVE_MODEL=gemini-3.8-flash cargo test --test live_gemini -- --ignored --test-threads=1
+STOIC_CODEX_LIVE_MODEL=gemini-3.8-flash cargo test --test live_gemini -- --ignored --test-threads=1
 ```
 
 Two live tests, both `#[ignore]`d so the default suite stays free, offline and deterministic:
@@ -173,7 +173,7 @@ Two live tests, both `#[ignore]`d so the default suite stays free, offline and d
 
 The default suite still runs with no key and no network. The live Gemini tests are opt-in and
 must only be run within the user's confirmed free quota. The displayed price is a list-rate
-estimate; Zenithal does not know whether a provider applied free-tier credits or what appears
+estimate; Stoic Codex does not know whether a provider applied free-tier credits or what appears
 on the user's bill.
 
 ## Cost of this document

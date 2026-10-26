@@ -23,7 +23,7 @@
 //!
 //! Every executor starts life as a bare slot (`slot-1`, `slot-2`, …) because nothing knows
 //! yet what the work is. Strategos names each one from the code catalogue in
-//! `zenithal_brand::phalanx` — `x0-core` harvests context, `x1-write` writes the logic,
+//! `stoic_codex_brand::phalanx` — `x0-core` harvests context, `x1-write` writes the logic,
 //! `x2-check` validates, `x3-ship` deploys, `x4-scan` retrieves, `x5-patch` edits, `x6-audit`
 //! reviews, `x7-trace` diagnoses — so a log line says what an agent *is*, not just that it
 //! exists. The collective is **The Phalanx**.
@@ -48,7 +48,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use zenithal_providers::{CanonicalRequest, Content, Message, Role, Usage};
+use stoic_codex_providers::{CanonicalRequest, Content, Message, Role, Usage};
 
 use crate::loop_::{run_agent, AgentConfig, AgentError, Event, Model, ModelError, StopCause};
 use crate::tool::ToolRegistry;
@@ -56,9 +56,9 @@ use crate::worktree::{FileChange, GitError, Repo, Worktree};
 
 // ─── names ─────────────────────────────────────────────────────────────────────
 
-// The cast lives in `zenithal-brand::phalanx` so the orchestrator, the CLI and the TUI
+// The cast lives in `stoic-codex-brand::phalanx` so the orchestrator, the CLI and the TUI
 // cannot spell a code three ways.
-pub use zenithal_brand::phalanx::{Code, CODES, PHALANX, STRATEGOS};
+pub use stoic_codex_brand::phalanx::{Code, CODES, PHALANX, STRATEGOS};
 
 /// What an operator is called before Strategos has named it: a slot, not a job.
 ///
@@ -71,7 +71,7 @@ pub fn provisional_name(index: usize) -> String {
 
 /// The line a log gets when a code is deployed: `x1-write · the primary logic generator`.
 pub fn code_line(code: &str) -> String {
-    match zenithal_brand::phalanx::lookup(code) {
+    match stoic_codex_brand::phalanx::lookup(code) {
         Some(found) => format!("{} · {}", found.id, found.role),
         None => code.to_string(),
     }
@@ -183,14 +183,14 @@ pub fn name_codes(slots: &[String], plan: &mut Plan) -> Vec<(String, String)> {
         .map(|slot| plan.task_for(slot).unwrap_or_default().to_string())
         .collect();
     let borrowed: Vec<&str> = tasks.iter().map(String::as_str).collect();
-    let mut codes = zenithal_brand::phalanx::assign(&borrowed);
+    let mut codes = stoic_codex_brand::phalanx::assign(&borrowed);
 
     // Strategos' own names win where they are real and not already spoken for.
     let mut used: Vec<String> = Vec::new();
     for (i, slot) in slots.iter().enumerate() {
         let proposed = plan
             .code_for(slot)
-            .and_then(zenithal_brand::phalanx::lookup)
+            .and_then(stoic_codex_brand::phalanx::lookup)
             .map(|c| c.id);
         if let Some(id) = proposed {
             if !used.iter().any(|u| u == id) {
@@ -609,7 +609,7 @@ pub fn run_mission(
     let root = cfg
         .worktree_dir
         .clone()
-        .unwrap_or_else(|| repo.root().join(".git").join("zenithal-missions"));
+        .unwrap_or_else(|| repo.root().join(".git").join("stoic-codex-missions"));
     let mut worktrees: Vec<Worktree> = Vec::with_capacity(operators.len());
     for member in &operators {
         let dir = root.join(&member.codename);
@@ -725,7 +725,7 @@ pub fn run_mission(
     if total_applied > 0 && cfg.commit {
         let names: Vec<String> = applied_owner.iter().map(|(f, _)| f.clone()).collect();
         let message = format!(
-            "zenithal mission: {total_applied} file(s) from {} operators of {PHALANX} under {STRATEGOS}\n\n{}",
+            "stoic-codex mission: {total_applied} file(s) from {} operators of {PHALANX} under {STRATEGOS}\n\n{}",
             results.iter().filter(|r| r.verdict == Verdict::Accepted && !r.applied.is_empty()).count(),
             names.join(", ")
         );
@@ -923,7 +923,7 @@ fn run_operators(
         Err(e) => result.error = Some(e.to_string()),
     }
     result.patch = wt.patch().unwrap_or_default();
-    result.commit = match wt.commit_all(&format!("zenithal: {} — {}", member.codename, short(task)))
+    result.commit = match wt.commit_all(&format!("stoic-codex: {} — {}", member.codename, short(task)))
     {
         Ok(sha) => sha,
         Err(e) => {
@@ -1003,7 +1003,7 @@ fn verify(dir: &Path, cmd: &VerifyCommand) -> (bool, String) {
 /// What Strategos is told. It has no tools: its whole job is the plan and the review, and a
 /// commander that starts editing files is a commander not commanding.
 pub fn strategos_plan_prompt(task: &str, layout: &str, codenames: &[String]) -> CanonicalRequest {
-    let catalog: String = zenithal_brand::phalanx::CODES
+    let catalog: String = stoic_codex_brand::phalanx::CODES
         .iter()
         .map(|code| format!("{} = {}", code.id, code.role))
         .collect::<Vec<_>>()
@@ -1115,7 +1115,7 @@ fn request(system: String, user: String) -> CanonicalRequest {
         top_p: None,
         stop: Vec::new(),
         json_mode: false,
-        cache: zenithal_providers::CacheStrategy::Off,
+        cache: stoic_codex_providers::CacheStrategy::Off,
         reasoning: None,
         stream: Some(false),
         extra: Default::default(),
@@ -1125,7 +1125,7 @@ fn request(system: String, user: String) -> CanonicalRequest {
 fn operator_prompt(codename: &str, branch: &str) -> String {
     // The code is not decoration: it is the operator's job description, so the assignment
     // arrives inside a sentence that already says what kind of work this is.
-    let standing = match zenithal_brand::phalanx::lookup(codename) {
+    let standing = match stoic_codex_brand::phalanx::lookup(codename) {
         Some(code) => format!(
             "You are {codename} — {} — one of {PHALANX} under {STRATEGOS}.\n\
          \n\
@@ -1407,7 +1407,7 @@ impl Model for Scripted {
     fn complete(
         &self,
         request: &CanonicalRequest,
-    ) -> Result<zenithal_providers::CanonicalResponse, ModelError> {
+    ) -> Result<stoic_codex_providers::CanonicalResponse, ModelError> {
         self.seen.lock().unwrap().push(request.clone());
         let mut script = self.script.lock().unwrap();
         if script.is_empty() {
@@ -1417,10 +1417,10 @@ impl Model for Scripted {
             });
         }
         let text = script.remove(0);
-        Ok(zenithal_providers::CanonicalResponse {
+        Ok(stoic_codex_providers::CanonicalResponse {
             model: request.model.clone(),
             content: vec![Content::text(text)],
-            stop_reason: zenithal_providers::StopReason::EndTurn,
+            stop_reason: stoic_codex_providers::StopReason::EndTurn,
             usage: Usage {
                 input_tokens: 100,
                 output_tokens: 40,
@@ -1441,7 +1441,7 @@ mod tests {
         fn complete(
             &self,
             _request: &CanonicalRequest,
-        ) -> Result<zenithal_providers::CanonicalResponse, ModelError> {
+        ) -> Result<stoic_codex_providers::CanonicalResponse, ModelError> {
             Err(ModelError::Transport(
                 "naming tests do not call a model".into(),
             ))

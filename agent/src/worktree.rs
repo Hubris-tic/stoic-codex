@@ -157,7 +157,7 @@ impl Repo {
     /// Create an isolated branch + working directory for one agent.
     ///
     /// `dir` is where the checkout goes; the caller owns it (a squad puts them under
-    /// `.zenithal/worktrees/`). The branch is `zenithal/<name>`, namespaced so a user can see
+    /// `.stoic-codex/worktrees/`). The branch is `stoic-codex/<name>`, namespaced so a user can see
     /// at a glance which branches the tool made and delete them all with one glob.
     pub fn create_worktree(
         &self,
@@ -171,7 +171,7 @@ impl Repo {
             });
         }
         let slug = slugify(name);
-        let branch = unique_branch(self, &format!("zenithal/{slug}"));
+        let branch = unique_branch(self, &format!("stoic-codex/{slug}"));
         if let Some(parent) = dir.parent() {
             std::fs::create_dir_all(parent).map_err(|e| GitError::Command {
                 args: "create worktree dir".into(),
@@ -409,7 +409,7 @@ fn parse_name_status(text: &str) -> Vec<FileChange> {
 ///
 /// A fresh clone on a fresh machine has no `user.name`/`user.email` and git refuses to
 /// commit. Losing a whole mission at its last step because of that would be absurd, so the
-/// orchestrator commits as `Zenithal <zenithal@localhost>` — but only when nothing is
+/// orchestrator commits as `Stoic Codex <stoic-codex@localhost>` — but only when nothing is
 /// configured, so a user who *has* an identity never sees our name in their history.
 fn identity_flags(dir: &Path) -> Vec<String> {
     let configured = Command::new("git")
@@ -424,9 +424,9 @@ fn identity_flags(dir: &Path) -> Vec<String> {
     } else {
         [
             "-c",
-            "user.name=Zenithal",
+            "user.name=Stoic Codex",
             "-c",
-            "user.email=zenithal@localhost",
+            "user.email=stoic-codex@localhost",
         ]
         .iter()
         .map(|s| s.to_string())
@@ -445,7 +445,7 @@ mod tests {
     impl TestRepo {
         pub fn new(tag: &str) -> TestRepo {
             let dir = std::env::temp_dir().join(format!(
-                "zenithal-wt-{tag}-{}-{:?}",
+                "stoic-codex-wt-{tag}-{}-{:?}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -502,7 +502,7 @@ mod tests {
 
     #[test]
     fn a_directory_outside_a_repository_is_named_plainly() {
-        let dir = std::env::temp_dir().join(format!("zenithal-norepo-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("stoic-codex-norepo-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let err = Repo::discover(&dir).unwrap_err();
         assert!(
@@ -524,8 +524,8 @@ mod tests {
             .unwrap();
 
         assert_ne!(a.path(), b.path());
-        assert_eq!(a.branch(), "zenithal/alpha");
-        assert_eq!(b.branch(), "zenithal/beta");
+        assert_eq!(a.branch(), "stoic-codex/alpha");
+        assert_eq!(b.branch(), "stoic-codex/beta");
 
         // The isolation property that matters: a write in one is invisible in the other.
         std::fs::write(a.path().join("only-a.txt"), "a").unwrap();
@@ -630,15 +630,15 @@ mod tests {
         let b = repo
             .create_worktree("same", &t.dir.join(".git/wt/2"), None)
             .unwrap();
-        assert_eq!(a.branch(), "zenithal/same");
-        assert_eq!(b.branch(), "zenithal/same-2");
+        assert_eq!(a.branch(), "stoic-codex/same");
+        assert_eq!(b.branch(), "stoic-codex/same-2");
         a.remove().unwrap();
         b.remove().unwrap();
     }
 
     #[test]
     fn a_repository_with_no_commits_says_so_instead_of_failing_obscurely() {
-        let dir = std::env::temp_dir().join(format!("zenithal-empty-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("stoic-codex-empty-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let status = Command::new("git")
             .arg("-C")
@@ -700,7 +700,7 @@ mod tests {
             .expect("a commit");
         assert_eq!(sha.len(), 40);
         let author = repo.git(&["log", "-1", "--format=%an <%ae>"]).unwrap();
-        assert!(author.contains("Zenithal"), "committed as {author}");
+        assert!(author.contains("Stoic Codex"), "committed as {author}");
         assert!(
             repo.is_clean().unwrap(),
             "staging everything must leave the tree clean"

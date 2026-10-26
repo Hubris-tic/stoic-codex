@@ -1,4 +1,4 @@
-//! The Zenithal palette: **a black hole, drawn in red**.
+//! The Stoic Codex palette: **a black hole, drawn in red**.
 //!
 //! The identity is one object — a black hole — so the palette is the physics of one:
 //!

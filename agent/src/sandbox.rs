@@ -200,7 +200,7 @@ mod tests {
             pub fn new() -> TempDir {
                 let mut path = std::env::temp_dir();
                 let unique = format!(
-                    "zenithal-agent-{}-{:?}",
+                    "stoic-codex-agent-{}-{:?}",
                     std::process::id(),
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
@@ -252,7 +252,7 @@ mod tests {
     #[test]
     fn a_symlink_out_of_the_root_is_refused() {
         let (sandbox, dir) = sandbox();
-        let outside = dir.path().parent().unwrap().join("zenithal-outside-target");
+        let outside = dir.path().parent().unwrap().join("stoic-codex-outside-target");
         std::fs::write(&outside, "secret").unwrap();
         #[cfg(unix)]
         {

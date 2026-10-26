@@ -10,11 +10,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use serde_json::json;
-use zenithal_agent::{
+use stoic_codex_agent::{
     provisional_name, run_mission, MissionConfig, MissionEvent, Model, Operator, OperatorState,
     Repo, Verdict,
 };
-use zenithal_providers::{CanonicalRequest, CanonicalResponse, Content, StopReason, Usage};
+use stoic_codex_providers::{CanonicalRequest, CanonicalResponse, Content, StopReason, Usage};
 
 // ─── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ struct TestRepo {
 impl TestRepo {
     fn new(tag: &str) -> TestRepo {
         let dir = std::env::temp_dir().join(format!(
-            "zenithal-mission-{tag}-{}-{:?}",
+            "stoic-codex-mission-{tag}-{}-{:?}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -77,7 +77,7 @@ impl TestRepo {
     }
 
     fn branches(&self) -> Vec<String> {
-        self.git(&["branch", "--list", "zenithal/*"])
+        self.git(&["branch", "--list", "stoic-codex/*"])
             .lines()
             .map(|l| l.trim_start_matches('*').trim().to_string())
             .filter(|l| !l.is_empty())
@@ -124,11 +124,11 @@ impl Model for Boss {
     fn complete(
         &self,
         request: &CanonicalRequest,
-    ) -> Result<CanonicalResponse, zenithal_agent::ModelError> {
+    ) -> Result<CanonicalResponse, stoic_codex_agent::ModelError> {
         self.prompts.lock().unwrap().push(request.clone());
         let mut replies = self.replies.lock().unwrap();
         if replies.is_empty() {
-            return Err(zenithal_agent::ModelError::Refused {
+            return Err(stoic_codex_agent::ModelError::Refused {
                 status: 500,
                 detail: "no more replies".into(),
             });
@@ -156,7 +156,7 @@ impl Model for Worker {
     fn complete(
         &self,
         _request: &CanonicalRequest,
-    ) -> Result<CanonicalResponse, zenithal_agent::ModelError> {
+    ) -> Result<CanonicalResponse, stoic_codex_agent::ModelError> {
         let i = self.calls.fetch_add(1, Ordering::SeqCst);
         if i < self.writes.len() {
             let (path, content) = &self.writes[i];
@@ -208,8 +208,8 @@ fn broken() -> Box<dyn Model> {
         fn complete(
             &self,
             _: &CanonicalRequest,
-        ) -> Result<CanonicalResponse, zenithal_agent::ModelError> {
-            Err(zenithal_agent::ModelError::Refused {
+        ) -> Result<CanonicalResponse, stoic_codex_agent::ModelError> {
+            Err(stoic_codex_agent::ModelError::Refused {
                 status: 500,
                 detail: "provider fell over".into(),
             })
@@ -301,7 +301,7 @@ fn strategos_divides_the_work_and_every_operators_lands_its_own_files() {
     .expect("mission should run");
 
     // The plan came from Strategos and gave each agent different work.
-    assert_eq!(report.plan.source, zenithal_agent::PlanSource::Strategos);
+    assert_eq!(report.plan.source, stoic_codex_agent::PlanSource::Strategos);
     let tasks: Vec<&str> = report
         .plan
         .assignments
@@ -333,7 +333,7 @@ fn strategos_divides_the_work_and_every_operators_lands_its_own_files() {
     assert_eq!(report.applied_count(), 3);
     assert!(report.commit.is_some());
     assert!(
-        t.log_subject().contains("zenithal mission"),
+        t.log_subject().contains("stoic-codex mission"),
         "{}",
         t.log_subject()
     );
@@ -347,7 +347,7 @@ fn strategos_divides_the_work_and_every_operators_lands_its_own_files() {
         "landed branches should be cleaned up"
     );
     assert!(
-        !t.dir.join(".git/zenithal-missions").exists(),
+        !t.dir.join(".git/stoic-codex-missions").exists(),
         "worktrees left behind"
     );
 }
@@ -457,7 +457,7 @@ fn an_unreadable_plan_falls_back_and_the_mission_still_runs() {
     )
     .expect("a bad plan must not sink the mission");
 
-    assert_eq!(report.plan.source, zenithal_agent::PlanSource::Fallback);
+    assert_eq!(report.plan.source, stoic_codex_agent::PlanSource::Fallback);
     assert_eq!(report.plan.assignments.len(), 2);
     assert!(report
         .plan
@@ -599,7 +599,7 @@ fn strategos_is_told_the_repository_layout_and_the_task() {
 
     // The Boss keeps its own record only through the model trait, so re-run one call here
     // to assert on what the plan prompt contained.
-    let request = zenithal_agent::strategos::strategos_plan_prompt(
+    let request = stoic_codex_agent::strategos::strategos_plan_prompt(
         "the actual task",
         "src/ (1 entries)\nREADME.md\n",
         &[provisional_name(1), provisional_name(2)],
@@ -662,7 +662,7 @@ fn events_describe_the_whole_mission_for_a_ui() {
                 applying.fetch_add(1, Ordering::SeqCst);
             }
             MissionEvent::Agent {
-                event: zenithal_agent::Event::ToolCall { .. },
+                event: stoic_codex_agent::Event::ToolCall { .. },
                 ..
             } => {
                 tool_calls.fetch_add(1, Ordering::SeqCst);

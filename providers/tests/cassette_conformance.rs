@@ -6,7 +6,7 @@
 //! read_file(path=src/main.rs, line=42)". If a new adapter cannot satisfy this, it
 //! is not done. No network, no keys, no flakes.
 
-use zenithal_providers::{adapter_for, SseDecoder, StopReason, StreamAccumulator};
+use stoic_codex_providers::{adapter_for, SseDecoder, StopReason, StreamAccumulator};
 
 const EXPECTED_TEXT: &str = "I'll open that file.";
 const EXPECTED_TOOL: &str = "read_file";
@@ -17,7 +17,7 @@ const EXPECTED_OUTPUT_TOKENS: u64 = 57;
 
 fn replay(provider: &str, cassette: &str) -> StreamAccumulator {
     let adapter = adapter_for(provider).unwrap_or_else(|e| panic!("{provider}: {e}"));
-    let req = zenithal_providers::CanonicalRequest::new("test-model", "open src/main.rs line 42");
+    let req = stoic_codex_providers::CanonicalRequest::new("test-model", "open src/main.rs line 42");
     let mut decoder = adapter.stream_decoder(&req);
     let mut sse = SseDecoder::new();
     let mut acc = StreamAccumulator::default();
@@ -80,7 +80,7 @@ fn assert_identical_interaction(provider: &str, cassette: &str, expect_tool: boo
             .content
             .iter()
             .filter_map(|c| match c {
-                zenithal_providers::Content::ToolUse { name, input, .. } => {
+                stoic_codex_providers::Content::ToolUse { name, input, .. } => {
                     Some((name.clone(), input.clone()))
                 }
                 _ => None,
@@ -149,9 +149,9 @@ fn gemini_carries_usage_metadata() {
 /// The point of the IR: the same transcript must be expressible everywhere.
 #[test]
 fn every_adapter_accepts_the_same_transcript() {
-    use zenithal_providers::{Content, Message, Role, ToolSpec};
+    use stoic_codex_providers::{Content, Message, Role, ToolSpec};
 
-    let mut req = zenithal_providers::CanonicalRequest::new("model", "start")
+    let mut req = stoic_codex_providers::CanonicalRequest::new("model", "start")
         .with_system("You are a coding agent.")
         .with_max_tokens(2048)
         .with_tools(vec![ToolSpec {
@@ -175,7 +175,7 @@ fn every_adapter_accepts_the_same_transcript() {
     }]));
 
     let mut ok = 0;
-    for id in zenithal_providers::adapters::provider_ids() {
+    for id in stoic_codex_providers::adapters::provider_ids() {
         let a = adapter_for(id).unwrap();
         match a.build_request(&req) {
             Ok(w) => {
@@ -211,10 +211,10 @@ fn no_provider_leaks_a_secret_shape() {
     // Defence in depth: even if someone wires a key through `extra`, the adapter
     // must not smuggle it into a URL query string.
     use serde_json::json;
-    let mut req = zenithal_providers::CanonicalRequest::new("m", "x");
+    let mut req = stoic_codex_providers::CanonicalRequest::new("m", "x");
     req.extra
         .insert("api_key".into(), json!("sk-should-not-be-here"));
-    for id in zenithal_providers::adapters::provider_ids() {
+    for id in stoic_codex_providers::adapters::provider_ids() {
         let w = adapter_for(id).unwrap().build_request(&req).unwrap();
         assert!(!w.url.contains("sk-should-not-be-here"), "{id}: key in URL");
     }

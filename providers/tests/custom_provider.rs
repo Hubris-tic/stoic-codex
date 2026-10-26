@@ -6,10 +6,10 @@
 //!
 //! No network: a "provider" here is a JSON document plus recorded SSE text.
 
-use zenithal_providers::custom::{self, CustomProvider};
-use zenithal_providers::ir::{CanonicalEvent, Content, ToolSpec, Usage};
-use zenithal_providers::sse::SseDecoder;
-use zenithal_providers::{
+use stoic_codex_providers::custom::{self, CustomProvider};
+use stoic_codex_providers::ir::{CanonicalEvent, Content, ToolSpec, Usage};
+use stoic_codex_providers::sse::SseDecoder;
+use stoic_codex_providers::{
     AuthSpec, CanonicalRequest, Message, StopReason, StreamAccumulator, WireAdapter,
 };
 
@@ -143,7 +143,7 @@ fn openai_style_reuses_the_built_in_body_exactly() {
     // The whole point of `api_style: openai`: no second, subtly different implementation.
     let custom =
         provider(r#"{"id":"compat","base_url":"http://127.0.0.1:8080","api_style":"openai"}"#);
-    let builtin = zenithal_providers::adapter_for("openai-chat").unwrap();
+    let builtin = stoic_codex_providers::adapter_for("openai-chat").unwrap();
     let r = req();
     assert_eq!(
         custom.build_request(&r).unwrap().body,
@@ -558,7 +558,7 @@ fn messages_keep_their_roles_and_images() {
     let p = provider(FANCY);
     let mut r = req();
     r.messages.push(Message {
-        role: zenithal_providers::Role::User,
+        role: stoic_codex_providers::Role::User,
         content: vec![Content::Image {
             media_type: "image/png".into(),
             data: "AAAA".into(),
@@ -639,7 +639,7 @@ fn an_explicit_usage_path_is_not_overwritten_by_the_style_default() {
 /// The mapping actually fires when the payload arrives.
 #[test]
 fn openai_style_usage_is_reported_from_a_streamed_reply() {
-    use zenithal_providers::{CanonicalEvent, CanonicalRequest, SseDecoder, WireAdapter};
+    use stoic_codex_providers::{CanonicalEvent, CanonicalRequest, SseDecoder, WireAdapter};
     let provider = CustomProvider::from_json(
         r#"{"id":"lab","base_url":"http://127.0.0.1:9","api_style":"openai"}"#,
     )
@@ -650,7 +650,7 @@ fn openai_style_usage_is_reported_from_a_streamed_reply() {
     let body = "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n\
                 data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":4}}\n\n\
                 data: [DONE]\n\n";
-    let mut usage = zenithal_providers::Usage::default();
+    let mut usage = stoic_codex_providers::Usage::default();
     let mut stop = None;
     for frame in sse.push(body) {
         for event in decoder.push_frame(&frame).unwrap() {
@@ -663,7 +663,7 @@ fn openai_style_usage_is_reported_from_a_streamed_reply() {
     }
     assert_eq!(usage.input_tokens, 9);
     assert_eq!(usage.output_tokens, 4);
-    assert_eq!(stop, Some(zenithal_providers::StopReason::EndTurn));
+    assert_eq!(stop, Some(stoic_codex_providers::StopReason::EndTurn));
 }
 
 /// The most common spec mistake: the version in `base_url` *and* in `path`, which

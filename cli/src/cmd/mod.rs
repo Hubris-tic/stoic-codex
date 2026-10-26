@@ -9,8 +9,8 @@ pub mod providers;
 pub mod run;
 pub mod tools;
 
-use zenithal_memory::daemon::{DaemonConfig, LaunchPolicy};
-use zenithal_memory::{MemoryStore, OpenOptions, OpenedMemory};
+use stoic_codex_memory::daemon::{DaemonConfig, LaunchPolicy};
+use stoic_codex_memory::{MemoryStore, OpenOptions, OpenedMemory};
 
 use crate::config::Config;
 use crate::paths::Paths;

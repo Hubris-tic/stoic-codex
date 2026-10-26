@@ -1,6 +1,6 @@
-# Example BYOK configuration for Zenithal.
-# Lives at ~/.zenithal/config.toml (upstream used ~/.codex/config.toml; see NAMING.md).
-# Adapter ids come from `zenithal_providers::adapters::provider_ids()`.
+# Example BYOK configuration for Stoic Codex.
+# Lives at ~/.stoic-codex/config.toml (upstream used ~/.codex/config.toml; see NAMING.md).
+# Adapter ids come from `stoic_codex_providers::adapters::provider_ids()`.
 
 [model_providers.anthropic]
 wire     = "anthropic"

@@ -1,11 +1,11 @@
-//! `zenithal daemon status` — what the local database situation actually is.
+//! `stoic-codex daemon status` — what the local database situation actually is.
 //!
 //! Read-only on purpose: starting a daemon is done implicitly by the commands that need
 //! one, so there is no `daemon start` that could leave an orphan behind.
 
 use std::io::Write;
 
-use zenithal_memory::daemon::{self, LaunchPolicy};
+use stoic_codex_memory::daemon::{self, LaunchPolicy};
 
 use crate::args::Parsed;
 use crate::cmd::{CmdError, CmdResult};
@@ -56,7 +56,7 @@ fn status(paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         "binary      {}",
         binary
             .map(|b| b.display().to_string())
-            .unwrap_or_else(|| "not found (set ZENITHAL_TYPEDB_BIN)".into())
+            .unwrap_or_else(|| "not found (set STOIC_CODEX_TYPEDB_BIN)".into())
     );
     let _ = writeln!(ctx.out, "policy      {policy:?}");
     let _ = writeln!(ctx.out, "data        {}", paths.typedb_data_dir().display());

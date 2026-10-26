@@ -1,27 +1,29 @@
 //! Live integration test against a **local** TypeDB daemon.
 //!
-//! Runs only when `ZENITHAL_TYPEDB_ADDR` is set (e.g. `127.0.0.1:1729`), so a normal
+//! Runs only when `STOIC_CODEX_TYPEDB_ADDR` is set (e.g. `127.0.0.1:1729`), so a normal
 //! `cargo test` — and CI without a daemon — stays green and hermetic. There is no
 //! network access and no hosted service involved: TypeDB CE is a local binary the user
-//! starts (or which `zenithal` starts for them).
+//! starts (or which `stoic-codex` starts for them).
 //!
 //! ```bash
 //! typedb server --server.listen-address 127.0.0.1:1729 \
-//!               --storage.data-directory ~/.zenithal/typedb &
-//! ZENITHAL_TYPEDB_ADDR=127.0.0.1:1729 cargo test --features typedb --test typedb_live
+//!               --storage.data-directory ~/.stoic-codex/typedb &
+//! STOIC_CODEX_TYPEDB_ADDR=127.0.0.1:1729 cargo test --features typedb --test typedb_live
 //! ```
 
 #![cfg(feature = "typedb")]
 
-use zenithal_memory::typedb_driver::LocalTypeDb;
-use zenithal_memory::MemoryBackend;
-use zenithal_memory::{EdgeKind, MemoryEdge, MemoryNode, NodeKind, Query};
+use stoic_codex_memory::typedb_driver::LocalTypeDb;
+use stoic_codex_memory::MemoryBackend;
+use stoic_codex_memory::{EdgeKind, MemoryEdge, MemoryNode, NodeKind, Query};
 
 fn backend(test: &str) -> Option<LocalTypeDb> {
-    let addr = std::env::var("ZENITHAL_TYPEDB_ADDR").ok()?;
+    let addr = std::env::var("STOIC_CODEX_TYPEDB_ADDR")
+        .or_else(|_| std::env::var("ZENITHAL_TYPEDB_ADDR"))
+        .ok()?;
     // One database per test: cargo runs tests in parallel, and a shared database means
     // each test's `clear()` wipes another test's fixtures mid-run.
-    let db = format!("zenithal_memory_test_{}_{}", std::process::id(), test);
+    let db = format!("stoic_codex_memory_test_{}_{}", std::process::id(), test);
     let mut b = LocalTypeDb::connect(&addr, &db)
         .unwrap_or_else(|e| panic!("connect to local TypeDB at {addr}: {e}"));
     b.bootstrap()
@@ -35,7 +37,7 @@ macro_rules! live {
         match backend($name) {
             Some(b) => b,
             None => {
-                eprintln!("skipped: set ZENITHAL_TYPEDB_ADDR to run live TypeDB tests");
+                eprintln!("skipped: set STOIC_CODEX_TYPEDB_ADDR to run live TypeDB tests");
                 return;
             }
         }
@@ -248,7 +250,7 @@ fn forget_removes_a_node_and_the_edges_that_touch_it() {
     assert!(near.is_empty(), "a dangling edge survived: {near:?}");
     assert!(matches!(
         b.forget("file:b.rs"),
-        Err(zenithal_memory::MemoryError::NotFound(_))
+        Err(stoic_codex_memory::MemoryError::NotFound(_))
     ));
 }
 

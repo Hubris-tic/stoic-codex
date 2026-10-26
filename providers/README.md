@@ -1,4 +1,4 @@
-# zenithal-providers
+# stoic-codex-providers
 
 Provider-agnostic wire layer: **one canonical IR, many vendor adapters.**
 Pure translation — no async, no HTTP, no secrets. 112 tests, 0 warnings, no network required
@@ -47,12 +47,12 @@ plus compat presets: `groq`, `mistral`, `openrouter`, `deepseek`, `xai`, `togeth
 `fireworks`, `cerebras`, `ollama`, `lmstudio`, `vllm`.
 
 ```rust
-use zenithal_providers::{adapter_for, CanonicalRequest, SseDecoder, StreamAccumulator};
+use stoic_codex_providers::{adapter_for, CanonicalRequest, SseDecoder, StreamAccumulator};
 
 let adapter = adapter_for("anthropic")?;
 let req = CanonicalRequest::new("claude-sonnet-4-5", "explain this repo")
     .with_system("You are a coding agent.")
-    .with_cache(zenithal_providers::CacheStrategy::Prefix);
+    .with_cache(stoic_codex_providers::CacheStrategy::Prefix);
 
 let wire = adapter.build_request(&req)?;   // POST, url, headers, AuthSpec, JSON body
 // ... transport executes `wire`, feeds the response body into:
@@ -74,7 +74,7 @@ cargo run --example show_wire -- all
 
 ## Model catalogues and free-tier signals
 
-The CLI's `zenithal providers models <id> [--free]` sends a read-only catalogue GET, not a
+The CLI's `stoic-codex providers models <id> [--free]` sends a read-only catalogue GET, not a
 completion. Built-in adapters expose Gemini `/v1beta/models`, OpenAI-compatible `/models`
 (including Groq and OpenRouter), and Anthropic `/v1/models`; OpenAI-compatible custom specs
 can derive `/v1/models` from their `/v1/chat/completions` path. The parser reports only fields
@@ -88,7 +88,7 @@ your billing tier; use it to discover IDs, then check the provider's own free-qu
 ## Routing and cost
 
 ```rust
-use zenithal_providers::{Registry, Router, TaskClass, Requirements};
+use stoic_codex_providers::{Registry, Router, TaskClass, Requirements};
 let router = Router::new(Registry::seeded());   // or Registry::from_json(&config)
 let sel = router.select(TaskClass::Plan, &Requirements { prefer_local: true, ..Default::default() })?;
 println!("{} via {} — {}", sel.model, sel.provider, sel.rationale.join("; "));

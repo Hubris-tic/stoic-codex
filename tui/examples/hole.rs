@@ -20,7 +20,7 @@ use crossterm::terminal::{
 };
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
-use zenithal_tui_views::views::blackhole::{self, BlackHoleAnim};
+use stoic_codex_tui_views::views::blackhole::{self, BlackHoleAnim};
 
 const TICK: Duration = Duration::from_millis(66);
 

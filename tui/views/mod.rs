@@ -1,8 +1,8 @@
 //! Views: the mission board, the diff review, the memory graph, and the black hole.
 //!
 //! Each view is split in two:
-//!   * view-model logic lives in the `zenithal-ui-core` crate (pure, unit-tested, no terminal
-//!     types — see `zenithal/ui-core`);
+//!   * view-model logic lives in the `stoic-codex-ui-core` crate (pure, unit-tested, no terminal
+//!     types — see `stoic-codex/ui-core`);
 //!   * these modules only *draw* that model with ratatui, using `crate::theme` for colour
 //!     and `crate::chrome` for the frame around them.
 //!

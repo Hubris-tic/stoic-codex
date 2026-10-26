@@ -6,8 +6,8 @@
 //! No network, no keys: this prints the request the adapter builds for one
 //! canonical transcript, which is the fastest way to debug a 400 from a new vendor.
 
-use zenithal_providers::adapters;
-use zenithal_providers::{CanonicalRequest, Content, Message, Role, ToolSpec};
+use stoic_codex_providers::adapters;
+use stoic_codex_providers::{CanonicalRequest, Content, Message, Role, ToolSpec};
 
 fn demo_request() -> CanonicalRequest {
     let mut req = CanonicalRequest::new("demo-model", "Open src/main.rs and tell me what it does.")

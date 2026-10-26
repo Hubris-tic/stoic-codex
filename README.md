@@ -1,4 +1,4 @@
-# Zenithal
+# Stoic Codex
 
 Provider-agnostic coding agent. Fork of `openai/codex`, rebuilt around BYOK,
 multi-agent missions — one boss, N isolated worktree agents — and hybrid vector+graph memory.
@@ -12,33 +12,34 @@ _Working tree for the fork — provider layer first._
 ## Layout
 
 ```
-zenithal/
-  providers/            <- zenithal-providers crate (bypasses nothing; drop into codex-rs/providers)
+stoic-codex/
+  providers/            <- stoic-codex-providers crate (bypasses nothing; drop into codex-rs/providers)
     src/                <- IR, adapters, SSE, routing, cost
     tests/              <- cassettes, SSE spec, routing, cost
     examples/show_wire  <- inspect any provider's wire format, no network needed
     src/custom.rs       <- user-defined providers: JSON spec, templates, paths, stream map
     CUSTOM-PROVIDERS.md <- how to write your own API (two levels of escape)
     examples/custom_provider*.json <- ready-to-copy specs
-  memory/               <- zenithal-memory crate (graph + vector, swappable backend)
+  memory/               <- stoic-codex-memory crate (graph + vector, swappable backend)
     src/                <- domain, trait, ranking, in-process backend, daemon manager
     src/typedb_driver   <- real TypeDB backend, `--features typedb`, tested live
     schema/memory.tql   <- TypeDB 3.x schema + recursive `reachable` function
     TYPEDB.md           <- decision record + what the live server taught us
-  agent/                <- zenithal-agent crate: tool loop, sandbox, worktrees, the orchestrator
+  agent/                <- stoic-codex-agent crate: tool loop, sandbox, worktrees, the orchestrator
     src/loop_.rs        <- single-agent loop: Model trait, events, stop causes
     src/tools/          <- read/write/edit/list/search/shell/git tools, all sandboxed
     src/worktree.rs     <- Repo, Worktree, branches, patches, copy_file_to
     src/strategos.rs    <- Strategos plans, names The Phalanx, reviews; work lands
     README.md           <- the mission diagram and the rules that make it safe
-  cli/                  <- zenithal-cli crate: the `zenithal` binary (providers + memory + agents)
+  cli/                  <- stoic-codex-cli crate: the `stoic-codex` binary (providers + memory + agents)
     src/cmd/            <- run, agent, mission, providers, memory, daemon; no process::exit
-    src/model.rs        <- the bridge: zenithal-agent's Model trait over the live transport
+    src/model.rs        <- the bridge: stoic-codex-agent's Model trait over the live transport
     src/net/            <- the only I/O: blocking HTTP/1.1 + rustls, no async runtime
     src/session.rs      <- prompt assembly: identity → fenced memory → task
+    src/transcript.rs   <- owner-only local sessions, replay and token-budget eviction
     dev/stub_provider.py <- fake OpenAI-compatible server: exercise `run` with no model
     README.md           <- command reference: config, backends, exit codes, network
-  tui/                  <- zenithal-tui-views: the interface (ratatui 0.29, no crossterm in the lib)
+  tui/                  <- stoic-codex-tui-views: the interface (ratatui 0.29, no crossterm in the lib)
     src/theme.rs        <- the black-hole palette; heat() is the accretion-disk ramp
     src/chrome.rs       <- one frame for every screen: header, rule, body, rule, footer
     views/blackhole.rs  <- a real Kerr image on a terminal: nullgeo geodesics, cached per size
@@ -51,22 +52,26 @@ zenithal/
   ../AGENTIC-UPGRADE-PLAN.md <- the overall audit + roadmap
 ```
 
-## Where the name actually appears
+## Stoic Codex branding and compatibility
 
-| Surface | Zenithal? |
-|---|---|
-| GitHub repo, crate, docs, config examples | **yes** |
-| `zenithal-providers` (all 16 provider ids) | **yes** |
-| **TUI** | **no — still upstream `codex`**. 185 user-visible strings + 12 OpenAI URLs |
-| CLI binary | **no — still `codex`** (one-line fix, see `NAMING.md`) |
+The public product, repository slug, package prefix, CLI binary, docs, config directory, and TUI
+header use **Stoic Codex** / `stoic-codex`. Upstream identifiers such as `openai/codex`,
+`codex-rs`, `codex-cli`, `codex_home`, and `gpt-5-codex` remain unchanged by design; see
+[`NAMING.md`](NAMING.md) for the rename history, compatibility rules, and retained identifiers.
 
-Rebranding the TUI is real work, not a sed: `rebrand/strings.md` has the full inventory and
-`rebrand/apply-rebrand.sh` does the mechanical part (17 verified replacements). The
-dangerous items are not cosmetic — the fork currently fetches OpenAI's announcement feed,
-links bug reports to `openai/codex`, and `zenithal app` would download and install OpenAI's
-signed desktop binary.
+For existing installs, the CLI moves `~/.zenithal/` to `~/.stoic-codex/` on its first
+non-help command only when the new directory does not exist. If both exist, it keeps both and
+uses the new one. `ZENITHAL_HOME`, `ZENITHAL_PROVIDER`, and applicable `ZENITHAL_TYPEDB_*`
+variables remain compatibility fallbacks. The TypeDB identifier `zenithal_memory` and the
+secret directory `~/.zenithal-keys/` remain unchanged to protect existing data and credentials.
 
-## Verified state
+## Validation status
+
+The table below is the last validated baseline before the current transcript/session and branding
+changes. The latest Rust changes, including the rename and config migration, are **not compiled
+or counted here**: this environment has neither `cargo` nor `rustc`. The preview cell grids were
+updated and re-rasterized, but not regenerated by the Rust snapshot example. See
+[`CHECKLIST.md`](CHECKLIST.md) for the exact revalidation blocker.
 
 | Check | Result |
 |---|---|
@@ -75,16 +80,17 @@ signed desktop binary.
 | **A real vendor call** | **verified live** — Gemini 3.1 Flash-Lite, 2026-10-26: a streamed turn, two full agentic tool loops (read → edit → verify), and a read-only model-list GET through the shipped CLI. No Anthropic/OpenAI paid API calls. Cost display is a rate-card estimate, not billing data: [`providers/LIVE.md`](providers/LIVE.md) |
 | Providers wired | 16 ids (5 first-class + 11 compat presets) |
 | Network needed for the default tests | none — cassette/loopback only; 4 opt-in ignored live tests |
-| `zenithal-brand` crate | 17 tests green (identity self-consistency, no OpenAI URLs, and the Phalanx code catalogue) |
+| `stoic-codex-brand` crate | 17 tests green (identity self-consistency, no OpenAI URLs, and the Phalanx code catalogue) |
 | TUI rebrand | **patch 0001 ready** — 4 supply-chain bugs fixed + guard; `cargo check` still needed |
 | TUI views | **built** — diff review, mission board (Strategos pinned above The Phalanx), memory graph, and the black hole; 60 tests, compiles vs ratatui 0.29 |
 | TUI design system | **built** — `tui/src/theme.rs` + `tui/src/chrome.rs`: a black-hole palette with red and black as the only primaries, `heat()` as the disk ramp, one shared frame with four tabs, an activity feed under the mission table; rules in `tui/DESIGN.md`, each held by a test |
 | **Black hole screen** | **built** — `tui/views/blackhole.rs` renders a real Kerr image on a terminal: null geodesics integrated per cell with [`nullgeo`](https://crates.io/crates/nullgeo) (MIT, CPU-only, no GPU, no network), ISCO-bounded disk, photon ring, relativistic beaming, cached raster and a Keplerian flow animation; analytic fallback if the tracer ever fails |
-| Previews | `tui/preview/{mission,mission-narrow,diff,memory,hole,hole-narrow}.png` + `hole.gif` — **rendered from the shipped views** (`cargo run --example snapshot`, `--example frames`), not hand-drawn |
-| **Multi-agent (`zenithal-agent`)** | **built** — `run_mission`: Strategos plans, names The Phalanx, N operators work in N git worktrees, Strategos reviews, accepted files land whole, one commit |
+| Previews | `tui/preview/{mission,mission-narrow,diff,memory,hole,hole-narrow}.png` + `hole.gif` — original cell captures, with the Stoic Codex header/tab alignment and mission branch labels updated in the cell grids and re-rasterized; the Rust snapshot example could not be run here |
+| **Multi-agent (`stoic-codex-agent`)** | **built** — `run_mission`: Strategos plans, names The Phalanx, N operators work in N git worktrees, Strategos reviews, accepted files land whole, one commit |
 | Mission end-to-end | **verified** — 11 tests in `agent/tests/mission.rs` + 15 in `cli/tests/mission.rs` on real repos, real worktrees, real threads, one loopback socket |
-| Memory layer | **built** — `zenithal-memory`, 90 tests; TypeDB is an opt-in backend, not a hard dep |
-| **CLI (`zenithal`)** | **built** — `zenithal-cli`, 125 tests; `run`, `agent`, `mission` (run/plan), `tools`, `providers` (incl. `models`, `test`), `memory`, `context`, `daemon` |
+| Memory layer | **built** — `stoic-codex-memory`, 90 tests; TypeDB is an opt-in backend, not a hard dep |
+| **CLI (`stoic-codex`)** | **built** — `stoic-codex-cli`; `run`, `agent`, `mission` (run/plan), `tools`, `providers` (incl. `models`, `test`), `memory`, `context`, `daemon` |
+| **Conversation sessions** | **implemented, validation pending** — private local transcripts, `--continue` / `--resume`, canonical history replay, oldest-first token-budget pruning, and loopback/unit tests; cannot compile in the current container without Rust tooling |
 | **A real turn** | **verified over a socket** — 13 integration tests drive the shipped transport against a loopback HTTP server: streaming, non-streaming fallback, 429/500 handling, refused connections, credential handling, memory write-back and graph growth |
 | TLS | **verified live** — a real certificate chain from the system store is accepted, and a mismatched certificate is refused (`cargo test --test net_live -- --ignored`) |
 | **Retries** | **built** — 4 attempts by default, exponential backoff with equal jitter, `Retry-After` honoured, and never a retry after a delta has been printed (that would duplicate the answer). `providers.max_attempts` in config |
@@ -127,7 +133,7 @@ not an integrator with a merge strategy.
                │                                    │ worktree  │ worktree  │ worktree  │
                │                                    │ sandbox   │ sandbox   │ sandbox   │
                │                                    └─────┬─────┴─────┬─────┴─────┬─────┘
-               │                                          │ commit on zenithal/<code>
+               │                                          │ commit on stoic-codex/<code>
                ▼                                          │
         ┌─────────────┐   accept / reject each report      │
         │  STRATEGOS  │◀──────────────────────────────────┘
@@ -135,7 +141,7 @@ not an integrator with a merge strategy.
                ▼
      accepted files copied into the working tree (whole file, first accepted writer wins)
                ▼
-     one commit: `zenithal mission: N file(s) from …`
+     one commit: `stoic-codex mission: N file(s) from …`
 ```
 
 - **The boss has no tools.** Strategos plans, names and judges; it never edits a file.
@@ -180,7 +186,7 @@ cargo run --example snapshot                  # the shipped screens -> preview/*
 cargo run --release --example hole            # the black hole, live: q quits, space pauses, j jets
 
 cd ../cli
-cargo test                                    # 125 tests, no daemon, no network, no key
+cargo test                                    # offline CLI suite; no daemon, network, or key
 cargo test --test net_live -- --ignored       # 2 live TLS tests (needs network)
 
 # One turn against a fake local model server (no weights, no key)
@@ -189,27 +195,27 @@ cat > /tmp/lab.json <<'JSON'
 { "id": "lab", "base_url": "http://127.0.0.1:8099/v1", "api_style": "openai",
   "models": ["tiny"], "auth": { "kind": "none" } }
 JSON
-./target/debug/zenithal providers add /tmp/lab.json
-./target/debug/zenithal providers test lab --model tiny   # local fake completion; no vendor spend
-./target/debug/zenithal memory remember file:auth.rs auth.rs --text "token verification"
-./target/debug/zenithal run "what do you know about auth?" --provider lab --model tiny
+./target/debug/stoic-codex providers add /tmp/lab.json
+./target/debug/stoic-codex providers test lab --model tiny   # local fake completion; no vendor spend
+./target/debug/stoic-codex memory remember file:auth.rs auth.rs --text "token verification"
+./target/debug/stoic-codex run "what do you know about auth?" --provider lab --model tiny
 
-# The actual product surface, with no daemon present (falls back to ~/.zenithal/memory.json)
-./target/debug/zenithal memory remember file:auth.rs auth.rs --text "token verification"
-./target/debug/zenithal memory recall token
-./target/debug/zenithal context "token expiry" --budget 600
+# The actual product surface, with no daemon present (falls back to ~/.stoic-codex/memory.json)
+./target/debug/stoic-codex memory remember file:auth.rs auth.rs --text "token verification"
+./target/debug/stoic-codex memory recall token
+./target/debug/stoic-codex context "token expiry" --budget 600
 
 # Same commands using a real local TypeDB daemon
 cargo build --features typedb
-ZENITHAL_TYPEDB_BIN=/path/to/typedb ./target/debug/zenithal memory init
-ZENITHAL_TYPEDB_BIN=/path/to/typedb ./target/debug/zenithal memory stats
+STOIC_CODEX_TYPEDB_BIN=/path/to/typedb ./target/debug/stoic-codex memory init
+STOIC_CODEX_TYPEDB_BIN=/path/to/typedb ./target/debug/stoic-codex memory stats
 
 # Whole local stack: spawn a TypeDB daemon, use it, stop it
-ZENITHAL_TYPEDB_BIN=/path/to/typedb \
+STOIC_CODEX_TYPEDB_BIN=/path/to/typedb \
   cargo run --features typedb --example local_stack
 
 # Live integration tests against a local daemon
-cargo test --features typedb --test typedb_live   # needs ZENITHAL_TYPEDB_ADDR
+cargo test --features typedb --test typedb_live   # needs STOIC_CODEX_TYPEDB_ADDR
 ```
 
 ## Next steps, in order
@@ -221,11 +227,12 @@ cargo test --features typedb --test typedb_live   # needs ZENITHAL_TYPEDB_ADDR
 3. **M2 prove it, free-tier only** — use the Google AI Studio free quota, OpenRouter `:free`
    models, Groq free tier (if enabled on the account), and a local model. No paid Anthropic/OpenAI
    calls; separate the displayed rate-card estimate from actual account billing.
-4. **`zenithal stream` / transcript** — `run` sends one user turn and prints deltas; a real
-   session needs a pty-ish renderer (markdown, tool calls, diffs) and `--continue`.
-5. **Conversation state** — `run` is one turn with the memory block as its only history. A
-   session needs a transcript in the request (`messages`, not just `messages[0]`), a token
-   budget that evicts oldest-first, and `--continue` to resume.
+4. **`stoic-codex stream` / transcript renderer** — render markdown, tool calls, and diffs as
+   they arrive rather than relying on the current plain answer/progress output.
+5. **Conversation-state validation** — local JSON transcripts, canonical multi-message replay,
+   `--continue` / `--resume <id>`, and oldest-first token-budget eviction are implemented with
+   offline tests. Compilation and test execution are still pending: the current environment has
+   no `cargo` or `rustc`. See [`CHECKLIST.md`](CHECKLIST.md).
 6. ~~**First real vendor call**~~ — **done** (`providers/LIVE.md`): Gemini 3.1 Flash-Lite,
    streamed turn plus a four-turn tool loop. The `$0.000045` figure is a rate-card estimate,
    not a verified charge. The live pass found two bugs — mandatory `thoughtSignature` replay

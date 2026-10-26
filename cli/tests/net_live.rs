@@ -12,9 +12,9 @@
 
 use std::time::Duration;
 
-use zenithal_cli::net::{HttpRequest, LiveTransport, Transport, Url};
+use stoic_codex_cli::net::{HttpRequest, LiveTransport, Transport, Url};
 
-fn post(url: &str) -> Result<(u16, Vec<(String, String)>), zenithal_cli::net::NetError> {
+fn post(url: &str) -> Result<(u16, Vec<(String, String)>), stoic_codex_cli::net::NetError> {
     let url = Url::parse(url)?;
     let req = HttpRequest {
         method: "GET".to_string(),

@@ -1,7 +1,7 @@
 //! Cost accounting: integer micro-USD, cache-aware.
 
-use zenithal_providers::cost::{Ledger, Pricing};
-use zenithal_providers::Usage;
+use stoic_codex_providers::cost::{Ledger, Pricing};
+use stoic_codex_providers::Usage;
 
 #[test]
 fn plain_cost_math() {

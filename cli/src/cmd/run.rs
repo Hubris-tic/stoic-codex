@@ -1,4 +1,4 @@
-//! `zenithal run "<task>"` — one turn, end to end.
+//! `stoic-codex run "<task>"` — one turn of a local, persistent conversation.
 //!
 //! This is the command where the pieces stop being separable libraries and become a
 //! product: recall from memory, compose a prompt, translate it through a provider adapter,
@@ -21,9 +21,9 @@
 use std::io::Write;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use zenithal_memory::{EdgeKind, MemoryEdge, MemoryNode, NodeKind, OpenedMemory, Query};
-use zenithal_providers::custom::load_dir;
-use zenithal_providers::{
+use stoic_codex_memory::{EdgeKind, MemoryEdge, MemoryNode, NodeKind, OpenedMemory, Query};
+use stoic_codex_providers::custom::load_dir;
+use stoic_codex_providers::{
     adapter_for, AuthSpec, CanonicalEvent, CanonicalRequest, CanonicalResponse, Registry,
     SseDecoder, StopReason, Usage, WireAdapter,
 };
@@ -35,6 +35,7 @@ use crate::net::{HttpRequest, LiveTransport, Transport, Url};
 use crate::paths::Paths;
 use crate::retry::{self, RetryPolicy};
 use crate::session::{self, MemoryBlock};
+use crate::transcript::{self as transcript, ConversationSession};
 use crate::Ctx;
 
 /// What a successful turn produced, kept separate from printing so it can be asserted on.
@@ -66,7 +67,7 @@ pub fn turn(
     let task = parsed.rest().join(" ").trim().to_string();
     if task.is_empty() {
         return Err(CmdError::usage(
-            "usage: zenithal run <task…> [--provider ID] [--model NAME] [--no-stream] [--dry-run]",
+            "usage: stoic-codex run <task…> [--provider ID] [--model NAME] [--continue | --resume ID] [--no-session] [--no-stream] [--dry-run]",
         ));
     }
 
@@ -74,18 +75,55 @@ pub fn turn(
     let no_remember = parsed.switch("no-remember");
     let json = parsed.switch("json");
     let dry_run = parsed.switch("dry-run");
+    let no_session = parsed.switch("no-session");
+    let continue_session = parsed.switch("continue");
+    let resume_id = if parsed.has("resume") {
+        Some(parsed.value("resume").ok_or_else(|| {
+            CmdError::usage("usage: stoic-codex run <task…> --resume <session-id>")
+        })?)
+    } else {
+        None
+    };
+    if continue_session && resume_id.is_some() {
+        return Err(CmdError::usage("choose either --continue or --resume <session-id>"));
+    }
+    if no_session && (continue_session || resume_id.is_some()) {
+        return Err(CmdError::usage("--no-session cannot be combined with --continue or --resume"));
+    }
+
+    let mut session = if continue_session {
+        Some(
+            transcript::latest(paths)
+                .map_err(CmdError::failed)?
+                .ok_or_else(|| {
+                    CmdError::failed(format!(
+                        "no saved conversation to continue in {}",
+                        paths.sessions_dir().display()
+                    ))
+                })?,
+        )
+    } else if let Some(id) = resume_id {
+        Some(transcript::load(paths, id).map_err(CmdError::failed)?)
+    } else {
+        None
+    };
 
     // ── provider + model ────────────────────────────────────────────────────────────
+    // A resumed transcript keeps its original endpoint/model unless the user explicitly
+    // supplies new flags. Canonical messages are portable, so an explicit override can move
+    // a conversation to another provider.
     let provider_id = parsed
         .value("provider")
         .map(str::to_string)
+        .or_else(|| session.as_ref().map(|s| s.provider.clone()))
+        .or_else(|| std::env::var("STOIC_CODEX_PROVIDER").ok())
         .or_else(|| std::env::var("ZENITHAL_PROVIDER").ok())
         .or_else(|| cfg.providers.default.clone())
         .ok_or_else(|| {
             CmdError::usage(format!(
                 "no provider selected. Pass --provider <id>, or set providers.default in {}.\nbuilt-in ids: {}",
                 paths.config_file().display(),
-                zenithal_providers::adapters::provider_ids().join(", ")
+                stoic_codex_providers::adapters::provider_ids().join(", ")
             ))
         })?;
 
@@ -94,6 +132,12 @@ pub fn turn(
     let model = parsed
         .value("model")
         .map(str::to_string)
+        .or_else(|| {
+            session
+                .as_ref()
+                .filter(|s| s.provider == provider_id)
+                .map(|s| s.model.clone())
+        })
         .or_else(|| cfg.providers.model.clone())
         .ok_or_else(|| {
             CmdError::usage(
@@ -134,7 +178,7 @@ pub fn turn(
     let composed = session::compose(&task, &block);
 
     // ── build the request ───────────────────────────────────────────────────────────
-    let mut request = CanonicalRequest::new(wire_model.clone(), composed.user);
+    let mut request = CanonicalRequest::new(wire_model.clone(), composed.user.clone());
     request.system = Some(composed.system);
     request.max_tokens = parsed
         .value("max-tokens")
@@ -158,6 +202,57 @@ pub fn turn(
         cfg.providers.stream
     };
     request.stream = Some(stream);
+
+    if !no_session && session.is_none() && !dry_run {
+        session = Some(ConversationSession::new(provider_id.clone(), model.clone()));
+    }
+    let mut context_messages = if let Some(active) = session.as_mut() {
+        active.provider = provider_id.clone();
+        active.model = model.clone();
+        active.push_user(composed.user.clone());
+        active.messages.clone()
+    } else {
+        request.messages.clone()
+    };
+
+    // The current task is always budget-checked, including `--no-session` and `--dry-run`.
+    // Use model-specific registry context only when it belongs to the selected provider;
+    // otherwise use the adapter's declared limit. Seeded values are estimates, so reserve
+    // one output allowance before sending.
+    let capabilities = adapter.capabilities();
+    let max_context = spec
+        .filter(|candidate| candidate.provider == provider_id)
+        .map(|candidate| candidate.capabilities.max_context)
+        .unwrap_or(capabilities.max_context)
+        .max(1) as usize;
+    let model_max_output = spec
+        .filter(|candidate| candidate.provider == provider_id)
+        .map(|candidate| candidate.capabilities.max_output)
+        .unwrap_or(capabilities.max_output);
+    let reserve_output = request.max_tokens.unwrap_or(model_max_output).max(1) as usize;
+    // Prune only the request view. The on-disk transcript remains complete, so a larger
+    // context model (or an explicit --resume) can still recover older turns later.
+    let evicted = transcript::fit_context(
+        &mut context_messages,
+        request.system.as_deref().unwrap_or(""),
+        max_context,
+        reserve_output,
+    )
+    .map_err(CmdError::failed)?;
+    if evicted > 0 {
+        let label = session
+            .as_ref()
+            .map(|active| format!("session {}", active.id))
+            .unwrap_or_else(|| "request".to_string());
+        let _ = writeln!(
+            ctx.err,
+            "{}",
+            dim(&format!(
+                "{label}: removed {evicted} oldest turn(s) to fit the estimated {max_context}-token context window"
+            ))
+        );
+    }
+    request.messages = context_messages;
 
     let wire = adapter.build_request(&request).map_err(|e| {
         CmdError::failed(format!("{} could not build the request: {e}", adapter.id()))
@@ -214,7 +309,22 @@ pub fn turn(
         provider: provider_id.clone(),
         ..outcome
     };
-    report(&outcome, spec, json, ctx)?;
+    let session_id = if let Some(active) = session.as_mut() {
+        active.push_assistant(outcome.text.clone());
+        match transcript::save(paths, active) {
+            Ok(()) => Some(active.id.clone()),
+            Err(error) => {
+                let _ = writeln!(
+                    ctx.err,
+                    "warning: the answer succeeded, but its local transcript was not saved: {error}"
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+    report(&outcome, spec, json, session_id.as_deref(), ctx)?;
 
     // ── memory: remember ────────────────────────────────────────────────────────────
     if !no_remember {
@@ -237,8 +347,8 @@ pub(crate) fn resolve_adapter(
     }
     adapter_for(provider_id).map_err(|e| {
         CmdError::usage(format!(
-            "{e}\ninstall a spec with `zenithal providers add <file.json>` or pick one of: {}",
-            zenithal_providers::adapters::provider_ids().join(", ")
+            "{e}\ninstall a spec with `stoic-codex providers add <file.json>` or pick one of: {}",
+            stoic_codex_providers::adapters::provider_ids().join(", ")
         ))
     })
 }
@@ -583,12 +693,13 @@ fn cost_label(local: bool, cost: Option<f64>) -> String {
 
 fn report(
     outcome: &Outcome,
-    spec: Option<&zenithal_providers::ModelSpec>,
+    spec: Option<&stoic_codex_providers::ModelSpec>,
     json: bool,
+    session_id: Option<&str>,
     ctx: &mut Ctx,
 ) -> CmdResult {
     let cost =
-        spec.map(|s| zenithal_providers::cost::Pricing::cost_usd(&s.pricing, &outcome.usage));
+        spec.map(|s| stoic_codex_providers::cost::Pricing::cost_usd(&s.pricing, &outcome.usage));
     let local = spec.map(|s| s.local).unwrap_or(false);
 
     if json {
@@ -614,6 +725,7 @@ fn report(
                 "unknown"
             },
             "local": local,
+            "session_id": session_id,
         });
         let _ = writeln!(
             ctx.out,
@@ -623,7 +735,7 @@ fn report(
         return Ok(());
     }
 
-    // The answer is on stdout; the accounting goes to stderr so `zenithal run … > out.txt`
+    // The answer is on stdout; the accounting goes to stderr so `stoic-codex run … > out.txt`
     // yields a clean file.
     let mut line = format!(
         "{} · {} · in {} out {} tok · {} ms",
@@ -635,6 +747,9 @@ fn report(
     );
     line.push_str(" · ");
     line.push_str(&cost_label(local, cost));
+    if let Some(id) = session_id {
+        line.push_str(&format!(" · session {id} (local)"));
+    }
     let _ = writeln!(ctx.err, "{line}");
     Ok(())
 }
@@ -652,7 +767,7 @@ fn write_back(
     let id = format!("turn:{secs}");
     // The label is the *question*: a future task resembles a question far more often than
     // it resembles the phrasing of an old answer, and the label is what a human scans in
-    // `zenithal memory recall`.
+    // `stoic-codex memory recall`.
     let label = truncate(task.trim(), 60).replace('\n', " ");
     // The body keeps both sides, because "what did I ask, and what came back" is the pair
     // that is worth retrieving.

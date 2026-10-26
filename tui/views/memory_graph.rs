@@ -1,7 +1,7 @@
 //! Memory graph view: the hybrid vector+graph store, rendered as a readable layered
 //! neighbourhood instead of an unreadable force-directed cloud.
 //!
-//! Layout comes from `zenithal_ui_core::graph::layout` (deterministic, tested). This
+//! Layout comes from `stoic_codex_ui_core::graph::layout` (deterministic, tested). This
 //! module draws ranks as rows with an edge gutter, so a decision → file → symbol chain
 //! reads top-to-bottom like a call tree.
 //!
@@ -12,7 +12,7 @@
 //!             └──✗ timing leak
 //! ```
 
-use zenithal_ui_core::graph::{self, EdgeKind, Graph, Layout, NodeKind};
+use stoic_codex_ui_core::graph::{self, EdgeKind, Graph, Layout, NodeKind};
 use ratatui::layout::{Constraint, Rect};
 use ratatui::layout::Layout as Chunks;
 use ratatui::style::{Modifier, Style};
@@ -219,7 +219,7 @@ pub fn render_screen(frame: &mut Frame, area: Rect, state: &mut MemoryGraphState
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenithal_ui_core::graph::{EdgeKind, Node};
+    use stoic_codex_ui_core::graph::{EdgeKind, Node};
 
     fn state() -> MemoryGraphState {
         let mut g = Graph::default();

@@ -142,7 +142,7 @@ pub trait WireAdapter: Send + Sync {
     fn parse_response(&self, req: &CanonicalRequest, body: &Value) -> Result<CanonicalResponse>;
 
     /// How to ask this provider what it serves today, or `None` if it has no catalogue
-    /// endpoint. `zenithal providers models` uses this so the tool never has to believe a
+    /// endpoint. `stoic-codex providers models` uses this so the tool never has to believe a
     /// hardcoded list — which is exactly how `gemini-2.5-flash` came to be a 404.
     ///
     /// The returned request is a `GET` with no body; the credential is attached by the

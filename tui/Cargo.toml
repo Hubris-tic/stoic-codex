@@ -1,8 +1,8 @@
 [package]
-name = "zenithal-tui-views"
+name = "stoic-codex-tui-views"
 version = "0.1.0"
 edition = "2021"
-description = "Zenithal: ratatui views for diff review, squad board and memory graph."
+description = "Stoic Codex: ratatui views for diff review, squad board and memory graph."
 license = "Apache-2.0"
 
 # In the fork this becomes a module inside `codex-rs/tui` (which already depends on
@@ -13,7 +13,7 @@ ratatui = "0.29"
 # disk, and the frame dragging that makes a black hole look like a black hole. No GPU, no
 # async, no network. It is what draws the `hole` screen — see `views/blackhole.rs`.
 nullgeo = "0.2"
-zenithal-ui-core = { path = "../ui-core" }
+stoic-codex-ui-core = { path = "../ui-core" }
 
 # Only the examples need these; the views themselves stay dependency-free.
 [dev-dependencies]
@@ -24,7 +24,7 @@ crossterm = "0.28"
 
 # The tracer integrates geodesics, and this crate's own tests and examples run unoptimised by
 # default — which turns one 80x24 frame from 0.2 s into several seconds. Optimise the physics
-# dependencies; leave Zenithal's own code with the full set of debug assertions.
+# dependencies; leave Stoic Codex's own code with the full set of debug assertions.
 # The tracer is generic, so its instantiation for `Kerr` is compiled *into this crate* — which
 # means optimising only the dependency is not enough. Optimise dev and test builds; keep the
 # debug assertions, which are the part that catches mistakes.

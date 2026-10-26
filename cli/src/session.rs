@@ -6,8 +6,8 @@
 //! instructions it must obey. Retrieved text is untrusted input; it is fenced and
 //! labelled so it cannot masquerade as policy.
 
-use zenithal_brand as brand;
-use zenithal_providers::tokens;
+use stoic_codex_brand as brand;
+use stoic_codex_providers::tokens;
 
 /// The context block a session injects, or nothing at all.
 pub struct MemoryBlock {

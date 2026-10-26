@@ -1,6 +1,6 @@
-//! End-to-end tests for the `zenithal` binary.
+//! End-to-end tests for the `stoic-codex` binary.
 //!
-//! Everything runs through `zenithal_cli::run` with an injected home directory and captured
+//! Everything runs through `stoic_codex_cli::run` with an injected home directory and captured
 //! output, so nothing here touches the real `$HOME`, the network, or a daemon. The
 //! backend is pinned to `file` in each test's config so results do not depend on whether
 //! TypeDB happens to be installed on the machine running the tests.
@@ -9,7 +9,7 @@ mod support;
 
 use std::path::{Path, PathBuf};
 use support::Stub;
-use zenithal_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
+use stoic_codex_cli::{run, Buffers, Ctx, FAILED, OK, USAGE};
 
 struct Rig {
     home: PathBuf,
@@ -19,7 +19,7 @@ struct Rig {
 
 impl Rig {
     fn new(tag: &str) -> Rig {
-        let home = std::env::temp_dir().join(format!("zenithal-cli-{tag}-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!("stoic-codex-cli-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(&home).unwrap();
         let (ctx, buffers) = Ctx::buffered(home.clone());
@@ -30,13 +30,13 @@ impl Rig {
     }
 
     fn write_config(&mut self, json: &str) {
-        let dir = self.home.join(".zenithal");
+        let dir = self.home.join(".stoic-codex");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("config.json"), json).unwrap();
     }
 
     fn config_dir(&self) -> PathBuf {
-        self.home.join(".zenithal")
+        self.home.join(".stoic-codex")
     }
 
     /// Run one command line and return its exit code. Output is cleared first so a test
@@ -76,7 +76,7 @@ fn version_reports_the_fork_and_its_attribution() {
     let mut rig = Rig::new("version");
     assert_eq!(rig.run(&["--version"]), OK);
     let out = rig.out();
-    assert!(out.contains("Zenithal"), "{out}");
+    assert!(out.contains("Stoic Codex"), "{out}");
     assert!(
         out.contains("fork of openai/codex"),
         "Apache-2.0 requires the attribution: {out}"
@@ -154,7 +154,7 @@ fn providers_models_lists_only_explicitly_free_models_without_a_completion() {
     let stub = Stub::start(response.into_bytes());
     let mut rig = Rig::new("models");
     let spec = spec_file(
-        &std::env::temp_dir().join(format!("zenithal-cli-src-models-{}", std::process::id())),
+        &std::env::temp_dir().join(format!("stoic-codex-cli-src-models-{}", std::process::id())),
         "router.json",
         &format!(
             r#"{{"id":"router","base_url":"{}","path":"/v1/chat/completions","api_style":"openai"}}"#,
@@ -201,7 +201,7 @@ fn providers_models_lists_only_explicitly_free_models_without_a_completion() {
 fn providers_add_installs_validates_and_refuses_to_clobber() {
     let mut rig = Rig::new("add");
     let src = spec_file(
-        &std::env::temp_dir().join(format!("zenithal-cli-src-{}", std::process::id())),
+        &std::env::temp_dir().join(format!("stoic-codex-cli-src-{}", std::process::id())),
         "lab.json",
         r#"{"id":"lab","base_url":"http://127.0.0.1:8080","api_style":"openai","models":["m1"]}"#,
     );
@@ -230,7 +230,7 @@ fn providers_add_installs_validates_and_refuses_to_clobber() {
 fn providers_add_rejects_an_invalid_spec() {
     let mut rig = Rig::new("add-bad");
     let src = spec_file(
-        &std::env::temp_dir().join(format!("zenithal-cli-src-bad-{}", std::process::id())),
+        &std::env::temp_dir().join(format!("stoic-codex-cli-src-bad-{}", std::process::id())),
         "bad.json",
         r#"{"id":"bad"}"#,
     );
@@ -245,7 +245,7 @@ fn providers_add_rejects_an_invalid_spec() {
 fn providers_list_shows_user_specs_with_their_endpoint() {
     let mut rig = Rig::new("list");
     let src = spec_file(
-        &std::env::temp_dir().join(format!("zenithal-cli-src-list-{}", std::process::id())),
+        &std::env::temp_dir().join(format!("stoic-codex-cli-src-list-{}", std::process::id())),
         "lab.json",
         r#"{"id":"lab","base_url":"http://127.0.0.1:8080","path":"/infer","api_style":"openai","models":["m1","m2"]}"#,
     );
@@ -262,7 +262,7 @@ fn a_user_spec_shadows_a_built_in_id() {
     // The user's own definition is the more specific statement of intent.
     let mut rig = Rig::new("shadow");
     let src = spec_file(
-        &std::env::temp_dir().join(format!("zenithal-cli-src-shadow-{}", std::process::id())),
+        &std::env::temp_dir().join(format!("stoic-codex-cli-src-shadow-{}", std::process::id())),
         "anthropic.json",
         r#"{"id":"anthropic","base_url":"http://127.0.0.1:9999","path":"/v1/messages","api_style":"openai"}"#,
     );
@@ -534,7 +534,7 @@ fn context_system_only_omits_the_user_turn() {
     rig.run(&["memory", "remember", "file:a.rs", "a.rs", "--text", "token"]);
     assert_eq!(rig.run(&["context", "token", "--system-only"]), OK);
     let out = rig.out();
-    assert!(out.starts_with("You are Zenithal"), "{out}");
+    assert!(out.starts_with("You are Stoic Codex"), "{out}");
     assert!(
         !out.contains("--- user ---"),
         "system-only must not print a user turn: {out}"

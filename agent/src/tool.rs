@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use serde_json::Value;
-use zenithal_providers::ToolSpec;
+use stoic_codex_providers::ToolSpec;
 
 use crate::sandbox::Sandbox;
 

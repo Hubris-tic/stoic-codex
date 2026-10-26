@@ -1,6 +1,6 @@
 //! Local daemon management: start TypeDB **on this machine**, or use no database at all.
 //!
-//! The rule this module enforces: Zenithal never asks the user to rent a server. The
+//! The rule this module enforces: Stoic Codex never asks the user to rent a server. The
 //! graph store is either a process on loopback that this module started (or found
 //! already running), or the in-memory backend. There is no third option, no cloud
 //! fallback, and no account.
@@ -24,9 +24,10 @@ use std::time::{Duration, Instant};
 use crate::domain::{MemoryError, Result};
 
 pub const DEFAULT_ADDR: &str = "127.0.0.1:1729";
+// Persistent TypeDB identifier retained across the product rename.
 pub const DEFAULT_DATABASE: &str = "zenithal_memory";
 
-/// Whether Zenithal may start a local database.
+/// Whether Stoic Codex may start a local database.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LaunchPolicy {
     /// Use a local daemon if one is running or can be started; otherwise carry on
@@ -50,7 +51,7 @@ pub enum Provenance {
 pub struct DaemonConfig {
     pub address: String,
     pub database: String,
-    /// Data directory. Defaults to `~/.zenithal/typedb`.
+    /// Data directory. Defaults to `~/.stoic-codex/typedb`.
     pub data_dir: PathBuf,
     /// Where the daemon's stdout/stderr go.
     pub log_file: PathBuf,
@@ -64,7 +65,7 @@ impl Default for DaemonConfig {
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        let base = home.join(".zenithal");
+        let base = home.join(".stoic-codex");
         DaemonConfig {
             address: DEFAULT_ADDR.to_string(),
             database: DEFAULT_DATABASE.to_string(),
@@ -115,7 +116,7 @@ impl LocalDaemon {
         }
         if !is_loopback(&config.address) {
             return Err(MemoryError::Invalid(format!(
-                "daemon address `{}` is not loopback: Zenithal memory is local-only",
+                "daemon address `{}` is not loopback: Stoic Codex memory is local-only",
                 config.address
             )));
         }
@@ -238,10 +239,13 @@ impl Drop for LocalDaemon {
 
 /// Find a local `typedb` binary, in priority order.
 ///
-/// `$ZENITHAL_TYPEDB_BIN` wins so a user can point at a specific install; then the standard
-/// per-user install location; then `PATH`.
+/// `$STOIC_CODEX_TYPEDB_BIN` wins so a user can point at a specific install; the former
+/// `$ZENITHAL_TYPEDB_BIN` remains a compatibility fallback, followed by the standard install
+/// location and then `PATH`.
 pub fn find_binary() -> Option<PathBuf> {
-    if let Some(explicit) = std::env::var_os("ZENITHAL_TYPEDB_BIN") {
+    if let Some(explicit) = std::env::var_os("STOIC_CODEX_TYPEDB_BIN")
+        .or_else(|| std::env::var_os("ZENITHAL_TYPEDB_BIN"))
+    {
         let path = PathBuf::from(explicit);
         if is_executable(&path) {
             return Some(path);
@@ -313,7 +317,7 @@ mod tests {
 
     fn temp_dir(tag: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("zenithal-daemon-test-{tag}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("stoic-codex-daemon-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -426,11 +430,11 @@ mod tests {
         };
 
         // Point discovery at the fake binary without touching the real environment.
-        std::env::set_var("ZENITHAL_TYPEDB_BIN", &binary);
+        std::env::set_var("STOIC_CODEX_TYPEDB_BIN", &binary);
         let daemon = LocalDaemon::ensure(&cfg)
             .expect("ensure")
             .expect("must spawn");
-        std::env::remove_var("ZENITHAL_TYPEDB_BIN");
+        std::env::remove_var("STOIC_CODEX_TYPEDB_BIN");
 
         assert_eq!(daemon.provenance(), Provenance::Spawned);
         assert!(daemon.owned());
@@ -456,13 +460,13 @@ mod tests {
     fn no_binary_means_no_database_rather_than_an_error() {
         let dir = temp_dir("nobinary");
         let addr = "127.0.0.1:47323";
-        std::env::set_var("ZENITHAL_TYPEDB_BIN", dir.join("does-not-exist"));
+        std::env::set_var("STOIC_CODEX_TYPEDB_BIN", dir.join("does-not-exist"));
         let cfg = DaemonConfig {
             address: addr.into(),
             ..Default::default()
         };
         let got = LocalDaemon::ensure(&cfg).expect("missing binary is not an error");
-        std::env::remove_var("ZENITHAL_TYPEDB_BIN");
+        std::env::remove_var("STOIC_CODEX_TYPEDB_BIN");
         assert!(got.is_none(), "must fall back to the in-memory backend");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -479,7 +483,7 @@ mod tests {
             perms.set_mode(0o755);
             std::fs::set_permissions(&binary, perms).unwrap();
         }
-        std::env::set_var("ZENITHAL_TYPEDB_BIN", &binary);
+        std::env::set_var("STOIC_CODEX_TYPEDB_BIN", &binary);
         let cfg = DaemonConfig {
             address: "127.0.0.1:47324".into(),
             data_dir: dir.join("data"),
@@ -488,7 +492,7 @@ mod tests {
             ..Default::default()
         };
         let err = LocalDaemon::ensure(&cfg).unwrap_err();
-        std::env::remove_var("ZENITHAL_TYPEDB_BIN");
+        std::env::remove_var("STOIC_CODEX_TYPEDB_BIN");
         let msg = err.to_string();
         assert!(msg.contains("exited during startup"), "{msg}");
         assert!(

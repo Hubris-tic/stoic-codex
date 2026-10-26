@@ -37,7 +37,7 @@ pub fn escape(value: &str) -> String {
 }
 
 /// `define` block that bootstraps the schema. Mirrors `schema/memory.tql`; kept here so
-/// `zenithal memory init --backend typedb` does not depend on the repository layout.
+/// `stoic-codex memory init --backend typedb` does not depend on the repository layout.
 pub fn schema_definition() -> String {
     let mut s = String::new();
     s.push_str("define\n");

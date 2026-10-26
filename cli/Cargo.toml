@@ -1,19 +1,19 @@
 [package]
-name = "zenithal-cli"
+name = "stoic-codex-cli"
 version = "0.1.0"
 edition = "2021"
-description = "Zenithal: the `zenithal` command. Wires providers and memory into something you can run."
+description = "Stoic Codex: the `stoic-codex` command. Wires providers and memory into something you can run."
 license = "Apache-2.0"
 
 [[bin]]
-name = "zenithal"
+name = "stoic-codex"
 path = "src/main.rs"
 
 [dependencies]
-zenithal-brand = { path = "../brand" }
-zenithal-providers = { path = "../providers" }
-zenithal-memory = { path = "../memory" }
-zenithal-agent = { path = "../agent" }
+stoic-codex-brand = { path = "../brand" }
+stoic-codex-providers = { path = "../providers" }
+stoic-codex-memory = { path = "../memory" }
+stoic-codex-agent = { path = "../agent" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -24,5 +24,5 @@ rustls-native-certs = "0.8"
 rustls-pki-types = "1"
 
 [features]
-# Passes through to zenithal-memory: enables the local TypeDB backend.
-typedb = ["zenithal-memory/typedb"]
+# Passes through to stoic-codex-memory: enables the local TypeDB backend.
+typedb = ["stoic-codex-memory/typedb"]

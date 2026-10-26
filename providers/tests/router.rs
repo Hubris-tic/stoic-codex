@@ -1,8 +1,8 @@
 //! Router behaviour: cheap models for cheap work, strong models for hard work,
 //! and a rationale for every decision.
 
-use zenithal_providers::capabilities::Needs;
-use zenithal_providers::{Registry, Requirements, Router, TaskClass};
+use stoic_codex_providers::capabilities::Needs;
+use stoic_codex_providers::{Registry, Requirements, Router, TaskClass};
 
 fn router() -> Router {
     Router::new(Registry::seeded())
@@ -30,7 +30,7 @@ fn planning_prefers_a_strong_model() {
         .select(TaskClass::Plan, &Requirements::default())
         .unwrap();
     assert!(
-        matches!(sel.tier, zenithal_providers::registry::Tier::Strong),
+        matches!(sel.tier, stoic_codex_providers::registry::Tier::Strong),
         "planning needs a strong model, got {:?}",
         sel
     );
@@ -110,13 +110,13 @@ fn prefer_local_picks_the_local_model_when_capable() {
 #[test]
 fn tier_ceiling_is_respected() {
     let req = Requirements {
-        max_tier: Some(zenithal_providers::registry::Tier::Small),
+        max_tier: Some(stoic_codex_providers::registry::Tier::Small),
         ..Default::default()
     };
     let sel = router()
         .select(TaskClass::Patch, &Requirements { ..req })
         .unwrap();
-    assert_eq!(sel.tier, zenithal_providers::registry::Tier::Small);
+    assert_eq!(sel.tier, stoic_codex_providers::registry::Tier::Small);
 }
 
 #[test]

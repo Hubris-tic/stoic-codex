@@ -17,12 +17,12 @@
 //! cargo test --test live_gemini -- --ignored --test-threads=1
 //! ```
 //!
-//! They also read `ZENITHAL_LIVE_MODEL` (default `gemini-3.1-flash-lite`) so a different
+//! They also read `STOIC_CODEX_LIVE_MODEL` (default `gemini-3.1-flash-lite`) so a different
 //! model can be exercised without editing the test.
 
 use std::process::Command;
 
-use zenithal_cli::{run, Ctx, OK};
+use stoic_codex_cli::{run, Ctx, OK};
 
 fn key() -> Option<String> {
     std::env::var("GEMINI_API_KEY")
@@ -31,16 +31,16 @@ fn key() -> Option<String> {
 }
 
 fn model() -> String {
-    std::env::var("ZENITHAL_LIVE_MODEL").unwrap_or_else(|_| "gemini-3.1-flash-lite".into())
+    std::env::var("STOIC_CODEX_LIVE_MODEL").unwrap_or_else(|_| "gemini-3.1-flash-lite".into())
 }
 
 /// A throwaway `$HOME` with a Gemini provider configured to read the key from the env.
 fn home(tag: &str) -> std::path::PathBuf {
-    let home = std::env::temp_dir().join(format!("zenithal-live-{tag}-{}", std::process::id()));
+    let home = std::env::temp_dir().join(format!("stoic-codex-live-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
-    std::fs::create_dir_all(home.join(".zenithal")).unwrap();
+    std::fs::create_dir_all(home.join(".stoic-codex")).unwrap();
     std::fs::write(
-        home.join(".zenithal/config.json"),
+        home.join(".stoic-codex/config.json"),
         r#"{ "memory": { "backend": "file" },
              "providers": { "default": "gemini", "api_key_env": "GEMINI_API_KEY",
                             "max_tokens": 512, "timeout_secs": 120 } }"#,
@@ -107,7 +107,7 @@ fn a_real_tool_loop_survives_the_second_turn() {
         eprintln!("skipped: GEMINI_API_KEY is not set");
         return;
     }
-    let repo = std::env::temp_dir().join(format!("zenithal-live-repo-{}", std::process::id()));
+    let repo = std::env::temp_dir().join(format!("stoic-codex-live-repo-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&repo);
     std::fs::create_dir_all(repo.join("src")).unwrap();
     let git = |args: &[&str]| {
@@ -128,7 +128,7 @@ fn a_real_tool_loop_survives_the_second_turn() {
         "-c",
         "user.name=Live",
         "-c",
-        "user.email=live@zenithal.invalid",
+        "user.email=live@stoic-codex.invalid",
         "commit",
         "-qm",
         "init",

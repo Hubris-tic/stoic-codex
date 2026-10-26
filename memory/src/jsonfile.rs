@@ -1,7 +1,7 @@
-//! A single-file local store: `~/.zenithal/memory.json`.
+//! A single-file local store: `~/.stoic-codex/memory.json`.
 //!
 //! Why this exists: the in-process backend forgets everything when the process exits,
-//! which makes `zenithal memory remember …` followed by a later `zenithal context …`
+//! which makes `stoic-codex memory remember …` followed by a later `stoic-codex context …`
 //! useless. TypeDB fixes that but requires a daemon; users without one should still get
 //! memory that survives a restart, on disk, on their machine.
 //!
@@ -355,7 +355,7 @@ mod tests {
 
     fn temp_path(tag: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("zenithal-jsonfile-{tag}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("stoic-codex-jsonfile-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("memory.json")

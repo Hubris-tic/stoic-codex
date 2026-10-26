@@ -327,7 +327,7 @@ impl CustomSpec {
     }
 }
 
-/// Load every `*.json` provider spec in a directory (typically `~/.zenithal/providers/`).
+/// Load every `*.json` provider spec in a directory (typically `~/.stoic-codex/providers/`).
 ///
 /// Sorted by file name so load order — and therefore the router's tie-breaking — is
 /// deterministic. A malformed file is reported with its path; it is never skipped
@@ -1211,7 +1211,7 @@ mod tests {
 
     fn temp_dir(tag: &str) -> std::path::PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("zenithal-providers-{tag}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("stoic-codex-providers-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -1219,7 +1219,7 @@ mod tests {
 
     #[test]
     fn a_missing_directory_is_empty_not_an_error() {
-        let dir = std::env::temp_dir().join("zenithal-providers-does-not-exist");
+        let dir = std::env::temp_dir().join("stoic-codex-providers-does-not-exist");
         let _ = std::fs::remove_dir_all(&dir);
         assert!(load_dir(&dir).unwrap().is_empty());
     }

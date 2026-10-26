@@ -1,7 +1,7 @@
 //! SSE framing edge cases. These are the failure modes that produce silent
 //! truncation in production, so they get explicit coverage.
 
-use zenithal_providers::SseDecoder;
+use stoic_codex_providers::SseDecoder;
 
 fn frames(chunks: &[&str]) -> Vec<String> {
     let mut d = SseDecoder::new();

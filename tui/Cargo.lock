@@ -759,25 +759,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
-name = "zenithal-brand"
+name = "stoic-codex-brand"
 version = "0.1.0"
 
 [[package]]
-name = "zenithal-tui-views"
+name = "stoic-codex-tui-views"
 version = "0.1.0"
 dependencies = [
  "crossterm",
  "nullgeo",
  "ratatui",
  "serde_json",
- "zenithal-ui-core",
+ "stoic-codex-ui-core",
 ]
 
 [[package]]
-name = "zenithal-ui-core"
+name = "stoic-codex-ui-core"
 version = "0.1.0"
 dependencies = [
- "zenithal-brand",
+ "stoic-codex-brand",
 ]
 
 [[package]]

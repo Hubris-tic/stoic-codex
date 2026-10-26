@@ -1,11 +1,11 @@
 [package]
-name = "zenithal-ui-core"
+name = "stoic-codex-ui-core"
 version = "0.1.0"
 edition = "2021"
-description = "Zenithal: pure view-model logic for the TUI (diff review, mission board, memory graph, black hole). No ratatui, no I/O, fully testable."
+description = "Stoic Codex: pure view-model logic for the TUI (diff review, mission board, memory graph, black hole). No ratatui, no I/O, fully testable."
 license = "Apache-2.0"
 
 [dependencies]
 # The cast of a mission (Strategos, the short-hand system codes, The Phalanx) lives in the
 # brand crate so the view model, the orchestrator and the CLI cannot spell a code three ways.
-zenithal-brand = { path = "../brand" }
+stoic-codex-brand = { path = "../brand" }

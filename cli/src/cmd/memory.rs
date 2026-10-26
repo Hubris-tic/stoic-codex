@@ -1,4 +1,4 @@
-//! `zenithal memory …` and `zenithal context …`.
+//! `stoic-codex memory …` and `stoic-codex context …`.
 //!
 //! Every command opens the store through one helper, so the backend rules (local daemon →
 //! file store → nothing) are applied identically everywhere and the choice is always
@@ -6,7 +6,7 @@
 
 use std::io::Write;
 
-use zenithal_memory::{
+use stoic_codex_memory::{
     BackendChoice, EdgeKind, MemoryEdge, MemoryNode, NodeKind, OpenedMemory, Query,
 };
 
@@ -38,7 +38,7 @@ pub fn run(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             "unknown `memory` subcommand `{other}` (init, remember, link, recall, why, forget, stats)"
         ))),
         None => Err(CmdError::usage(
-            "usage: zenithal memory <init|remember|link|recall|why|forget|stats>",
+            "usage: stoic-codex memory <init|remember|link|recall|why|forget|stats>",
         )),
     }
 }
@@ -63,11 +63,11 @@ fn init(paths: &Paths, ctx: &mut Ctx) -> CmdResult {
 fn remember(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let rest = parsed.rest();
     let id = rest.get(1).ok_or_else(|| {
-        CmdError::usage("usage: zenithal memory remember <id> <label> [--kind file] [--text T] [--importance 0..1]")
+        CmdError::usage("usage: stoic-codex memory remember <id> <label> [--kind file] [--text T] [--importance 0..1]")
     })?;
     let label = rest
         .get(2)
-        .ok_or_else(|| CmdError::usage("usage: zenithal memory remember <id> <label>"))?;
+        .ok_or_else(|| CmdError::usage("usage: stoic-codex memory remember <id> <label>"))?;
 
     let kind_name = parsed.value("kind").unwrap_or("doc");
     let kind = NodeKind::parse(kind_name).ok_or_else(|| {
@@ -121,7 +121,7 @@ fn link(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let rest = parsed.rest();
     let (Some(from), Some(to), Some(kind_name)) = (rest.get(1), rest.get(2), rest.get(3)) else {
         return Err(CmdError::usage(
-            "usage: zenithal memory link <from-id> <to-id> <kind>  (kind: calls, imports, fixes, regresses, blocks, supersedes, derived_from, authored_by)",
+            "usage: stoic-codex memory link <from-id> <to-id> <kind>  (kind: calls, imports, fixes, regresses, blocks, supersedes, derived_from, authored_by)",
         ));
     };
     let kind = EdgeKind::parse(kind_name)
@@ -140,7 +140,7 @@ fn link(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
 /// positions in their argument lists.
 fn query_from(parsed: &Parsed, text: Option<&String>) -> Result<Query, CmdError> {
     let text = text.ok_or_else(|| {
-        CmdError::usage("usage: zenithal memory recall <query> [--focus ID] [--limit N]")
+        CmdError::usage("usage: stoic-codex memory recall <query> [--focus ID] [--limit N]")
     })?;
     let mut query = Query::new(text.clone());
     if let Some(focus) = parsed.value("focus") {
@@ -235,7 +235,7 @@ fn recall(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx, explain: bool) -> CmdRe
 
 fn forget(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let Some(id) = parsed.rest().get(1) else {
-        return Err(CmdError::usage("usage: zenithal memory forget <id>"));
+        return Err(CmdError::usage("usage: stoic-codex memory forget <id>"));
     };
     let (_cfg, mut opened) = open(paths)?;
     opened
@@ -313,7 +313,7 @@ fn count_entries(block: &str) -> usize {
         .count()
 }
 
-/// `zenithal context <query>` — the whole point of the memory layer: a prompt block.
+/// `stoic-codex context <query>` — the whole point of the memory layer: a prompt block.
 pub fn context(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let query = query_from(parsed, parsed.rest().first())?;
     let (cfg, opened) = open(paths)?;

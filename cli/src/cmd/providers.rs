@@ -1,4 +1,4 @@
-//! `zenithal providers …` — inspect and install provider definitions.
+//! `stoic-codex providers …` — inspect and install provider definitions.
 //!
 //! The provider library is deliberately transport-free: an adapter's job is translation.
 //! `providers show` prints the request shape without a network call; `providers models` uses
@@ -8,8 +8,8 @@
 use std::io::Write;
 use std::time::{Duration, Instant};
 
-use zenithal_providers::custom::{load_dir, CustomProvider};
-use zenithal_providers::{adapter_for, CanonicalRequest, WireAdapter};
+use stoic_codex_providers::custom::{load_dir, CustomProvider};
+use stoic_codex_providers::{adapter_for, CanonicalRequest, WireAdapter};
 
 use crate::config::Config;
 use crate::net::LiveTransport;
@@ -31,13 +31,13 @@ pub fn run(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             "unknown `providers` subcommand `{other}` (list, ids, models, add, show, test)"
         ))),
         None => Err(CmdError::usage(
-            "usage: zenithal providers <list|ids|models|add|show|test>",
+            "usage: stoic-codex providers <list|ids|models|add|show|test>",
         )),
     }
 }
 
 fn ids(ctx: &mut Ctx) -> CmdResult {
-    for id in zenithal_providers::adapters::provider_ids() {
+    for id in stoic_codex_providers::adapters::provider_ids() {
         let _ = writeln!(ctx.out, "{id}");
     }
     Ok(())
@@ -48,7 +48,7 @@ fn ids(ctx: &mut Ctx) -> CmdResult {
 fn models(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let Some(id) = parsed.rest().get(1) else {
         return Err(CmdError::usage(
-            "usage: zenithal providers models <id> [--free]",
+            "usage: stoic-codex providers models <id> [--free]",
         ));
     };
     let cfg = Config::load_for(paths).map_err(CmdError::failed)?;
@@ -107,7 +107,7 @@ fn models(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         .map_err(|e| CmdError::failed(format!("cannot read {provider} model catalogue: {e}")))?;
 
     if parsed.switch("free") {
-        models.retain(zenithal_providers::models::ModelInfo::is_free);
+        models.retain(stoic_codex_providers::models::ModelInfo::is_free);
     }
 
     let _ = writeln!(
@@ -167,7 +167,7 @@ fn list(paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         "ID", "STYLE", "BASE URL / SOURCE", "MODELS"
     );
     let mut built_in = 0usize;
-    for id in zenithal_providers::adapters::provider_ids() {
+    for id in stoic_codex_providers::adapters::provider_ids() {
         // Built-ins expose no metadata API yet; show what we can honestly show.
         let _ = writeln!(ctx.out, "{:<24} {:<9} {:<44} {}", id, "built-in", "-", "-");
         built_in += 1;
@@ -182,8 +182,8 @@ fn list(paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             spec.models.join(",")
         };
         let style = match spec.api_style {
-            zenithal_providers::custom::ApiStyle::Openai => "openai",
-            zenithal_providers::custom::ApiStyle::Custom => "custom",
+            stoic_codex_providers::custom::ApiStyle::Openai => "openai",
+            stoic_codex_providers::custom::ApiStyle::Custom => "custom",
         };
         let _ = writeln!(
             ctx.out,
@@ -209,7 +209,7 @@ fn list(paths: &Paths, ctx: &mut Ctx) -> CmdResult {
 fn add(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let Some(source) = parsed.rest().get(1) else {
         return Err(CmdError::usage(
-            "usage: zenithal providers add <file.json> [--force]",
+            "usage: stoic-codex providers add <file.json> [--force]",
         ));
     };
     let text = std::fs::read_to_string(source)
@@ -252,7 +252,7 @@ fn add(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
 fn show(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let Some(id) = parsed.rest().get(1) else {
         return Err(CmdError::usage(
-            "usage: zenithal providers show <id> [--prompt TEXT] [--model M]",
+            "usage: stoic-codex providers show <id> [--prompt TEXT] [--model M]",
         ));
     };
     let prompt = parsed.value("prompt").unwrap_or("hello");
@@ -280,10 +280,10 @@ fn show(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     }
     // Never print a credential; describe how it would be attached instead.
     match &wire.auth {
-        zenithal_providers::AuthSpec::None => {
+        stoic_codex_providers::AuthSpec::None => {
             let _ = writeln!(ctx.out, "(no credential)");
         }
-        zenithal_providers::AuthSpec::Bearer => {
+        stoic_codex_providers::AuthSpec::Bearer => {
             let _ = writeln!(ctx.out, "authorization: <bearer credential>");
         }
         auth => {
@@ -304,7 +304,7 @@ fn show(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
 fn test(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let Some(id) = parsed.rest().get(1) else {
         return Err(CmdError::usage(
-            "usage: zenithal providers test <id> [--model M] [--prompt TEXT] [--max-tokens N]",
+            "usage: stoic-codex providers test <id> [--model M] [--prompt TEXT] [--max-tokens N]",
         ));
     };
     let cfg = Config::load_for(paths).map_err(CmdError::failed)?;
@@ -382,17 +382,17 @@ fn test(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     // decode it rather than failing on "not JSON".
     if response.is_event_stream() {
         let mut decoder = adapter.stream_decoder(&request);
-        let mut sse = zenithal_providers::SseDecoder::new();
+        let mut sse = stoic_codex_providers::SseDecoder::new();
         let mut text = String::new();
-        let mut usage = zenithal_providers::Usage::default();
+        let mut usage = stoic_codex_providers::Usage::default();
         for frame in sse.push(&body) {
             for event in decoder
                 .push_frame(&frame)
                 .map_err(|e| CmdError::failed(format!("cannot decode the stream: {e}")))?
             {
                 match event {
-                    zenithal_providers::CanonicalEvent::TextDelta { text: t } => text.push_str(&t),
-                    zenithal_providers::CanonicalEvent::Usage { usage: u } => usage.merge_max(&u),
+                    stoic_codex_providers::CanonicalEvent::TextDelta { text: t } => text.push_str(&t),
+                    stoic_codex_providers::CanonicalEvent::Usage { usage: u } => usage.merge_max(&u),
                     _ => {}
                 }
             }
@@ -401,7 +401,7 @@ fn test(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             .finish()
             .map_err(|e| CmdError::failed(format!("cannot finish the stream: {e}")))?
         {
-            if let zenithal_providers::CanonicalEvent::Usage { usage: u } = event {
+            if let stoic_codex_providers::CanonicalEvent::Usage { usage: u } = event {
                 usage.merge_max(&u);
             }
         }

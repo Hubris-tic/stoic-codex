@@ -3,12 +3,12 @@
 version = 4
 
 [[package]]
-name = "zenithal-brand"
+name = "stoic-codex-brand"
 version = "0.1.0"
 
 [[package]]
-name = "zenithal-ui-core"
+name = "stoic-codex-ui-core"
 version = "0.1.0"
 dependencies = [
- "zenithal-brand",
+ "stoic-codex-brand",
 ]

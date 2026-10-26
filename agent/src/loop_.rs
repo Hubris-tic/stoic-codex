@@ -17,7 +17,7 @@
 //! 3. **The loop is bounded.** `max_steps` and `max_tool_calls` stop a model that has
 //!    decided to read the same file forever, and the outcome says which limit fired.
 
-use zenithal_providers::{
+use stoic_codex_providers::{
     CanonicalRequest, CanonicalResponse, Content, Message, Role, StopReason, ToolChoice, Usage,
 };
 
@@ -208,7 +208,7 @@ pub fn run_agent(
             top_p: None,
             stop: Vec::new(),
             json_mode: false,
-            cache: zenithal_providers::CacheStrategy::Off,
+            cache: stoic_codex_providers::CacheStrategy::Off,
             reasoning: None,
             stream: Some(false),
             extra: Default::default(),
@@ -355,7 +355,7 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
-    use zenithal_providers::{CanonicalResponse, Content};
+    use stoic_codex_providers::{CanonicalResponse, Content};
 
     /// A model that answers from a script. Each call pops the next response; running out
     /// is a bug in the test, not a behaviour to paper over.
@@ -424,7 +424,7 @@ mod tests {
 
     fn registry() -> ToolRegistry {
         let dir = std::env::temp_dir().join(format!(
-            "zenithal-loop-{}-{:?}",
+            "stoic-codex-loop-{}-{:?}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

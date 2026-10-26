@@ -1,6 +1,6 @@
 # A whole mission, verbatim
 
-The transcript below is a real run of the shipped `zenithal` binary against a real git
+The transcript below is a real run of the shipped `stoic-codex` binary against a real git
 repository over a real loopback socket. The only thing that is not a real model is the words
 coming back: `cli/dev/stub_mission.py` speaks the same chat-completions shape and plays
 Strategos and the operators of the Phalanx, so the prompts are the orchestrator's own and every
@@ -16,15 +16,15 @@ mkdir -p /tmp/demo-repo && cd /tmp/demo-repo && git init -q -b main
 printf 'demo repo\n' > README.md && git add -A
 git -c user.name=Demo -c user.email=demo@localhost commit -qm initial
 
-export ZENITHAL_HOME=/tmp/demo-home ZENITHAL_STUB_KEY=not-a-key
-mkdir -p $ZENITHAL_HOME/.zenithal
-cat > $ZENITHAL_HOME/.zenithal/config.json <<'JSON'
+export STOIC_CODEX_HOME=/tmp/demo-home STOIC_CODEX_STUB_KEY=not-a-key
+mkdir -p $STOIC_CODEX_HOME/.stoic-codex
+cat > $STOIC_CODEX_HOME/.stoic-codex/config.json <<'JSON'
 { "memory": { "backend": "file" },
   "providers": { "default": "openai-chat", "model": "stub",
-                 "base_url": "http://127.0.0.1:8099", "api_key_env": "ZENITHAL_STUB_KEY" } }
+                 "base_url": "http://127.0.0.1:8099", "api_key_env": "STOIC_CODEX_STUB_KEY" } }
 JSON
 
-zenithal mission run "add one file per code" --repo /tmp/demo-repo --agents 3 --parallel 3
+stoic-codex mission run "add one file per code" --repo /tmp/demo-repo --agents 3 --parallel 3
 ```
 
 ## What Strategos would do (stdout), before anything is deployed
@@ -57,9 +57,9 @@ you have to read to find the actor.
 [x0-core]   task    create x0-core.txt containing the word core
 [x1-write]  task    create x1-write.txt containing the word write
 [x2-check]  task    create x2-check.txt containing the word check
-[strategos] deploy  x0-core      branch=zenithal/x0-core
-[strategos] deploy  x1-write     branch=zenithal/x1-write
-[strategos] deploy  x2-check     branch=zenithal/x2-check
+[strategos] deploy  x0-core      branch=stoic-codex/x0-core
+[strategos] deploy  x1-write     branch=stoic-codex/x1-write
+[strategos] deploy  x2-check     branch=stoic-codex/x2-check
 [x2-check]  tool    write_file       {"content":"x2-check\n","path":"x2-check.txt"}
 [x2-check]  result  write_file       created x2-check.txt (9 bytes) (0ms)
 [x0-core]   tool    write_file       {"content":"x0-core\n","path":"x0-core.txt"}
@@ -104,7 +104,7 @@ $ ls
 README.md  x0-core.txt  x1-write.txt  x2-check.txt
 
 $ git log --oneline
-15008cd zenithal mission: 3 file(s) from 3 operators of The Phalanx under Strategos
+15008cd stoic-codex mission: 3 file(s) from 3 operators of The Phalanx under Strategos
 0b58477 initial
 
 $ git status --porcelain     # empty: nothing left staged, no worktrees lying around
@@ -113,8 +113,8 @@ $ git branch --list          # empty apart from main: branches whose work landed
 ```
 
 One commit for the mission, not three. The worktrees live under
-`.git/zenithal-missions/<code>` and are removed on the way out; the branches
-(`zenithal/x0-core`, `zenithal/x1-write`, `zenithal/x2-check`) existed only while the agents
+`.git/stoic-codex-missions/<code>` and are removed on the way out; the branches
+(`stoic-codex/x0-core`, `stoic-codex/x1-write`, `stoic-codex/x2-check`) existed only while the agents
 worked, because their files landed.
 
 ## The failure paths, also real
@@ -153,7 +153,7 @@ The first rehearsal ran in a repository with **no `user.name` / `user.email`** c
 exactly what a fresh clone on a fresh machine looks like. Every operator wrote its file, and
 then `git commit` inside the worktree refused, so all three came back `failed` with their work
 stranded. The fix is `worktree::identity_flags`: the orchestrator commits as
-`Zenithal <zenithal@localhost>` **only when no identity is configured anywhere**, and the CLI's
+`Stoic Codex <stoic-codex@localhost>` **only when no identity is configured anywhere**, and the CLI's
 mission tests now run in a repo with no identity at all so the path stays covered.
 
 ## Why the naming is in the log

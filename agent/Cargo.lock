@@ -93,21 +93,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
-name = "zenithal-agent"
+name = "stoic-codex-agent"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "zenithal-brand",
- "zenithal-providers",
+ "stoic-codex-brand",
+ "stoic-codex-providers",
 ]
 
 [[package]]
-name = "zenithal-brand"
+name = "stoic-codex-brand"
 version = "0.1.0"
 
 [[package]]
-name = "zenithal-providers"
+name = "stoic-codex-providers"
 version = "0.1.0"
 dependencies = [
  "serde",

@@ -1,7 +1,7 @@
 # TypeDB as the memory layer — decision and verification record
 
 **Verdict: yes, and it is now built and tested against a real local TypeDB 3.14.1.**
-It runs as a **local daemon on loopback**, started by Zenithal when needed. Nothing is
+It runs as a **local daemon on loopback**, started by Stoic Codex when needed. Nothing is
 hosted, nothing is rented, no account exists, and if no daemon is available the memory
 layer runs in-process instead.
 
@@ -30,7 +30,7 @@ TypeDB Community Edition, MPL-2.0, a single Rust binary (the Java/JRE core disap
 ```bash
 typedb server \
   --server.listen-address 127.0.0.1:1729 \
-  --storage.data-directory ~/.zenithal/typedb \
+  --storage.data-directory ~/.stoic-codex/typedb \
   --diagnostics.reporting.errors false \   # a local personal DB does not phone home
   --server.http.enabled false              # no Studio UI, one socket only
 ```
@@ -44,7 +44,7 @@ TypeDB 3.14.1, started locally in this workspace. Everything below is a passing 
 a design sketch.
 
 ```
-$ ZENITHAL_TYPEDB_ADDR=127.0.0.1:1729 cargo test --features typedb --test typedb_live
+$ STOIC_CODEX_TYPEDB_ADDR=127.0.0.1:1729 cargo test --features typedb --test typedb_live
 test schema_bootstraps_and_is_idempotent ... ok
 test round_trips_nodes_edges_and_embeddings ... ok
 test an_edge_to_a_missing_node_is_refused ... ok
@@ -55,18 +55,18 @@ test forget_removes_a_node_and_the_edges_that_touch_it ... ok
 test result: ok. 7 passed
 ```
 
-The same store driven through the shipped binary (`zenithal memory …`), which starts the
+The same store driven through the shipped binary (`stoic-codex memory …`), which starts the
 daemon, writes, and stops it — each command a separate process, data persisted in RocksDB
 between them:
 
 ```
-$ ZENITHAL_TYPEDB_BIN=…/typedb zenithal memory remember file:a.rs a.rs --text "alpha token"
+$ STOIC_CODEX_TYPEDB_BIN=…/typedb stoic-codex memory remember file:a.rs a.rs --text "alpha token"
 remembered file:a.rs (doc) in typedb — 1 entries
-$ zenithal memory link file:a.rs file:b.rs imports
+$ stoic-codex memory link file:a.rs file:b.rs imports
 linked file:a.rs -> file:b.rs (imports)
-$ zenithal memory forget file:b.rs
+$ stoic-codex memory forget file:b.rs
 forgot file:b.rs — 1 entries left
-$ zenithal memory stats
+$ stoic-codex memory stats
 backend      typedb (local daemon at 127.0.0.1:1729, Spawned)
 entries      1
 ```
@@ -74,7 +74,7 @@ entries      1
 And the whole stack start-to-stop:
 
 ```
-$ ZENITHAL_TYPEDB_BIN=…/typedb cargo run --features typedb --example local_stack
+$ STOIC_CODEX_TYPEDB_BIN=…/typedb cargo run --features typedb --example local_stack
 backend=typedb daemon=127.0.0.1:1730 provenance=Spawned
 --- packed context ---
 Relevant memory:
@@ -151,7 +151,7 @@ against the real parser or the real result set:
 - `search()` loads the graph and ranks in Rust rather than pushing scoring into TypeQL.
   For a personal memory (thousands of nodes) that is faster and keeps one scoring
   implementation; at millions of nodes it would need to move into the query.
-- The live tests are opt-in (`ZENITHAL_TYPEDB_ADDR`), so CI without a daemon stays green —
+- The live tests are opt-in (`STOIC_CODEX_TYPEDB_ADDR`), so CI without a daemon stays green —
   which means a regression in the driver path would only be caught by a machine that has
   the daemon. That is a deliberate trade, and the reason `local_stack` exists as a
   one-command check.

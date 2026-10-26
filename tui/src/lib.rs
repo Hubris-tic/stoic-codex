@@ -1,7 +1,7 @@
-//! Zenithal TUI views (standalone crate wrapper).
+//! Stoic Codex TUI views (standalone crate wrapper).
 //!
 //! In the fork these modules live inside `codex-rs/tui` as `mod views;` — see
-//! `zenithal/tui/WORKLOG.md`. This crate exists so the views can be type-checked in
+//! `stoic-codex/tui/WORKLOG.md`. This crate exists so the views can be type-checked in
 //! isolation, which is how CI should check them before paying for a full workspace build.
 //!
 //! Three pieces:

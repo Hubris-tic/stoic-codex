@@ -1,4 +1,4 @@
-//! `zenithal tools` — what an agent can do on this machine, printed as the model sees it.
+//! `stoic-codex tools` — what an agent can do on this machine, printed as the model sees it.
 //!
 //! Showing the schemas rather than prose is the point: if a model is failing to call a
 //! tool correctly, this is the spec it was given.
@@ -6,8 +6,8 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use zenithal_agent::tools::shell::ShellPolicy;
-use zenithal_agent::{Sandbox, ToolRegistry};
+use stoic_codex_agent::tools::shell::ShellPolicy;
+use stoic_codex_agent::{Sandbox, ToolRegistry};
 
 use crate::args::Parsed;
 use crate::cmd::{CmdError, CmdResult};

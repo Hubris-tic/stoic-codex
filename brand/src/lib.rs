@@ -1,6 +1,6 @@
-//! # zenithal-brand
+//! # stoic-codex-brand
 //!
-//! Every user-visible identity string in Zenithal comes from here.
+//! Every user-visible identity string in Stoic Codex comes from here.
 //!
 //! Why: upstream hardcodes "Codex" in **185 shipped strings** plus a handful of URLs
 //! that point at OpenAI's infrastructure. Scattering replacements across the tree means
@@ -17,48 +17,48 @@
 
 pub mod phalanx;
 
-/// Display name, used mid-sentence and in headings: "Zenithal".
-pub const NAME: &str = "Zenithal";
+/// Display name, used mid-sentence and in headings: "Stoic Codex".
+pub const NAME: &str = "Stoic Codex";
 
-/// Short slug for the binary, config dir and status-line app name: "zenithal".
-pub const APP_NAME: &str = "zenithal";
+/// Short slug for the binary, config dir and status-line app name: "stoic-codex".
+pub const APP_NAME: &str = "stoic-codex";
 
 /// CLI binary name.
-pub const BIN: &str = "zenithal";
+pub const BIN: &str = "stoic-codex";
 
-/// Config directory under `$HOME`, without the leading dot: `.zenithal`.
-pub const CONFIG_DIR: &str = ".zenithal";
+/// Config directory under `$HOME`: `.stoic-codex`.
+pub const CONFIG_DIR: &str = ".stoic-codex";
 
-/// Env var prefix for the fork's own variables: `ZENITHAL_HOME`, `ZENITHAL_LOG`, ...
-pub const ENV_PREFIX: &str = "ZENITHAL_";
+/// Env var prefix for the fork's own variables: `STOIC_CODEX_HOME`, `STOIC_CODEX_LOG`, ...
+pub const ENV_PREFIX: &str = "STOIC_CODEX_";
 
-/// Legacy upstream values, read as a fallback so existing installs keep their data.
-pub const LEGACY_CONFIG_DIR: &str = ".codex";
-pub const LEGACY_ENV_PREFIX: &str = "CODEX_";
+/// Previous product values accepted during the one-time config/environment migration.
+pub const LEGACY_CONFIG_DIR: &str = ".zenithal";
+pub const LEGACY_ENV_PREFIX: &str = "ZENITHAL_";
 
 /// One-line description for `--help`, package metadata and the about screen.
 pub const TAGLINE: &str =
     "Provider-agnostic coding agent: BYOK everywhere, your keys, your machine.";
 
 /// Project home. Everything user-facing links here, never to OpenAI's properties.
-pub const HOMEPAGE: &str = "https://github.com/Hubris-tic/zenithal";
+pub const HOMEPAGE: &str = "https://github.com/Hubris-tic/stoic-codex";
 
 /// Where bug reports go. Upstream points at `openai/codex` issues, which would send
 /// our users to a tracker we cannot triage.
-pub const ISSUES_URL: &str = "https://github.com/Hubris-tic/zenithal/issues/new";
+pub const ISSUES_URL: &str = "https://github.com/Hubris-tic/stoic-codex/issues/new";
 
 /// Docs. Upstream uses `developers.openai.com/codex/*`.
-pub const DOCS_URL: &str = "https://github.com/Hubris-tic/zenithal/tree/main/docs";
+pub const DOCS_URL: &str = "https://github.com/Hubris-tic/stoic-codex/tree/main/docs";
 
 /// Announcement tips feed. Upstream fetches `raw.githubusercontent.com/openai/codex/...`,
 /// which would render *OpenAI's* announcements inside our TUI. Point it at us, or set to
 /// `None` to disable the feature entirely.
 pub const ANNOUNCEMENT_TIP_URL: Option<&str> =
-    Some("https://raw.githubusercontent.com/Hubris-tic/zenithal/main/announcement_tip.toml");
+    Some("https://raw.githubusercontent.com/Hubris-tic/stoic-codex/main/announcement_tip.toml");
 
 /// Attribution shown in the session header and `--version` output. Required by
 /// Apache-2.0 §4(b): state that this is a modified fork.
-pub const ATTRIBUTION: &str = "Zenithal (fork of openai/codex)";
+pub const ATTRIBUTION: &str = "Stoic Codex (fork of openai/codex)";
 
 /// The origin alone, for places that already printed [`NAME`] and should not repeat it.
 pub const ORIGIN: &str = "fork of openai/codex";
@@ -67,25 +67,25 @@ pub const ORIGIN: &str = "fork of openai/codex";
 pub const LICENSE: &str = "Apache-2.0";
 
 /// "Codex can make mistakes" style disclaimer, rebranded.
-pub const DISCLAIMER: &str = "Zenithal can make mistakes";
+pub const DISCLAIMER: &str = "Stoic Codex can make mistakes";
 
 /// Composer placeholder.
-pub const PLACEHOLDER: &str = "Ask Zenithal to do anything";
+pub const PLACEHOLDER: &str = "Ask Stoic Codex to do anything";
 
-/// Session header line, e.g. "Zenithal (v0.1.0)".
+/// Session header line, e.g. "Stoic Codex (v0.1.0)".
 pub fn version_header(version: &str) -> String {
     format!("{NAME} (v{version})")
 }
 
-/// Resolve the config directory, preferring ours and falling back to upstream's so a
-/// rebrand never orphans a user's history. Returns the *chosen* path plus whether the
-/// legacy location was used.
+/// Resolve the config directory, preferring ours and falling back to the previous
+/// product's location so a rebrand never orphans a user's history. Returns the *chosen*
+/// path plus whether the legacy location was used.
 pub fn resolve_config_dir(
     home: &std::path::Path,
-    have_zenithal: bool,
-    have_codex: bool,
+    have_stoic_codex: bool,
+    have_legacy: bool,
 ) -> (std::path::PathBuf, bool) {
-    if have_zenithal || !have_codex {
+    if have_stoic_codex || !have_legacy {
         (home.join(CONFIG_DIR), true)
     } else {
         (home.join(LEGACY_CONFIG_DIR), false)
@@ -103,9 +103,9 @@ mod tests {
         assert!(CONFIG_DIR.contains(APP_NAME));
         assert!(
             ENV_PREFIX.ends_with('_'),
-            "env prefix must be joinable: ZENITHAL_HOME"
+            "env prefix must be joinable: STOIC_CODEX_HOME"
         );
-        assert!(NAME.contains("Zenithal"));
+        assert!(NAME.contains("Stoic Codex"));
     }
 
     #[test]
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn version_header_is_branded() {
-        assert_eq!(version_header("0.1.0"), "Zenithal (v0.1.0)");
+        assert_eq!(version_header("0.1.0"), "Stoic Codex (v0.1.0)");
     }
 
     #[test]
@@ -149,22 +149,22 @@ mod tests {
         // Both present -> prefer ours.
         assert_eq!(
             resolve_config_dir(home, true, true),
-            (home.join(".zenithal"), true)
+            (home.join(".stoic-codex"), true)
         );
         // Only ours -> use ours.
         assert_eq!(
             resolve_config_dir(home, true, false),
-            (home.join(".zenithal"), true)
+            (home.join(".stoic-codex"), true)
         );
         // Fresh install -> create ours.
         assert_eq!(
             resolve_config_dir(home, false, false),
-            (home.join(".zenithal"), true)
+            (home.join(".stoic-codex"), true)
         );
-        // Only legacy -> keep using it, do not abandon the user's sessions.
+        // Only the previous product directory -> keep using it until migration completes.
         assert_eq!(
             resolve_config_dir(home, false, true),
-            (home.join(".codex"), false)
+            (home.join(".zenithal"), false)
         );
     }
 

@@ -1,7 +1,7 @@
 //! Catalogue discovery stays at the wire-shape layer: request construction and parsing are
 //! testable without a key, an HTTP call, or a completion.
 
-use zenithal_providers::{adapter_for, AuthSpec};
+use stoic_codex_providers::{adapter_for, AuthSpec};
 
 #[test]
 fn free_tier_provider_presets_build_read_only_model_requests() {

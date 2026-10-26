@@ -1,8 +1,8 @@
-//! `zenithal` — wiring, not plumbing.
+//! `stoic-codex` — wiring, not plumbing.
 //!
 //! This crate is deliberately thin: it parses arguments, resolves local paths, opens the
-//! memory backend, and prints. The logic lives in `zenithal-providers` (wire adapters) and
-//! `zenithal-memory` (graph + vectors), which are both independently testable.
+//! memory backend, and prints. The logic lives in `stoic-codex-providers` (wire adapters) and
+//! `stoic-codex-memory` (graph + vectors), which are both independently testable.
 //!
 //! Design choice: **no CLI framework**. Argument parsing here is ~100 lines with tests,
 //! which keeps the dependency tree flat and the binary fast to start — the same reason
@@ -20,6 +20,7 @@ pub mod net;
 pub mod paths;
 pub mod retry;
 pub mod session;
+pub mod transcript;
 
 /// A write sink that can be cloned and shared across threads.
 ///
@@ -126,7 +127,7 @@ pub fn run(argv: &[String], ctx: &mut Ctx) -> i32 {
         Ok(p) => p,
         Err(e) => {
             let _ = writeln!(ctx.err, "error: {e}");
-            let _ = writeln!(ctx.err, "run `zenithal --help` for usage");
+            let _ = writeln!(ctx.err, "run `stoic-codex --help` for usage");
             return USAGE;
         }
     };
@@ -137,14 +138,14 @@ pub fn run(argv: &[String], ctx: &mut Ctx) -> i32 {
         let _ = writeln!(
             ctx.out,
             "{}",
-            zenithal_brand::version_header(env!("CARGO_PKG_VERSION"))
+            stoic_codex_brand::version_header(env!("CARGO_PKG_VERSION"))
         );
-        let _ = writeln!(ctx.out, "{}", zenithal_brand::TAGLINE);
+        let _ = writeln!(ctx.out, "{}", stoic_codex_brand::TAGLINE);
         let _ = writeln!(
             ctx.out,
             "{}, {} — local only, no account, no telemetry",
-            zenithal_brand::ORIGIN,
-            zenithal_brand::LICENSE
+            stoic_codex_brand::ORIGIN,
+            stoic_codex_brand::LICENSE
         );
         return OK;
     }
@@ -154,6 +155,30 @@ pub fn run(argv: &[String], ctx: &mut Ctx) -> i32 {
     }
 
     let paths = paths::Paths::from_env(ctx.home.clone());
+    match paths.migrate_legacy_config() {
+        Ok(paths::ConfigMigration::Migrated) => {
+            let _ = writeln!(
+                ctx.err,
+                "migrated local config from {} to {}",
+                paths.home().join(stoic_codex_brand::LEGACY_CONFIG_DIR).display(),
+                paths.config_dir().display()
+            );
+        }
+        Ok(paths::ConfigMigration::BothExist) => {
+            let _ = writeln!(
+                ctx.err,
+                "warning: both {} and {} exist; using the new Stoic Codex directory and leaving the legacy copy untouched",
+                paths.config_dir().display(),
+                paths.home().join(stoic_codex_brand::LEGACY_CONFIG_DIR).display()
+            );
+        }
+        Ok(paths::ConfigMigration::Unchanged) => {}
+        Err(error) => {
+            let _ = writeln!(ctx.err, "error: cannot migrate local config: {error}");
+            return FAILED;
+        }
+    }
+
     let result = match parsed.positional[0].as_str() {
         "run" => cmd::run::run(&parsed, &paths, ctx),
         "agent" => cmd::agent::run(&parsed, &paths, ctx),
@@ -167,13 +192,13 @@ pub fn run(argv: &[String], ctx: &mut Ctx) -> i32 {
             let _ = writeln!(
                 ctx.out,
                 "{}",
-                zenithal_brand::version_header(env!("CARGO_PKG_VERSION"))
+                stoic_codex_brand::version_header(env!("CARGO_PKG_VERSION"))
             );
             let _ = writeln!(
                 ctx.out,
                 "{}, {}",
-                zenithal_brand::ORIGIN,
-                zenithal_brand::LICENSE
+                stoic_codex_brand::ORIGIN,
+                stoic_codex_brand::LICENSE
             );
             Ok(())
         }
@@ -184,7 +209,7 @@ pub fn run(argv: &[String], ctx: &mut Ctx) -> i32 {
         Ok(()) => OK,
         Err(cmd::CmdError::Usage(msg)) => {
             let _ = writeln!(ctx.err, "error: {msg}");
-            let _ = writeln!(ctx.err, "run `zenithal --help` for usage");
+            let _ = writeln!(ctx.err, "run `stoic-codex --help` for usage");
             USAGE
         }
         Err(cmd::CmdError::Failed(msg)) => {
@@ -198,33 +223,34 @@ pub fn help_text() -> String {
     let mut h = String::new();
     h.push_str(&format!(
         "{} — {}\n",
-        zenithal_brand::NAME,
-        zenithal_brand::TAGLINE
+        stoic_codex_brand::NAME,
+        stoic_codex_brand::TAGLINE
     ));
-    h.push_str("\nUSAGE\n  zenithal <command> [options]\n");
+    h.push_str("\nUSAGE\n  stoic-codex <command> [options]\n");
 
-    h.push_str("\nRUN (one turn: memory → prompt → your provider → answer → memory)\n");
+    h.push_str("\nRUN (memory → prompt → provider → answer → local transcript)\n");
     h.push_str(
-        "  zenithal run <task…>                    send one turn to the configured provider\n",
+        "  stoic-codex run <task…>                    send a turn; transcript is local\n",
     );
     h.push_str("                                        (--provider, --model, --max-tokens,\n");
-    h.push_str("                                         --temperature, --no-stream, --dry-run,\n");
+    h.push_str("                                         --temperature, --continue, --resume ID,\n");
+    h.push_str("                                         --no-session, --no-stream, --dry-run,\n");
     h.push_str("                                         --no-memory, --no-remember, --json)\n");
 
     h.push_str("\nAGENT (one agent, with tools, in this repository)\n");
     h.push_str(
-        "  zenithal agent run <task…>              read, edit and verify files with tools\n",
+        "  stoic-codex agent run <task…>              read, edit and verify files with tools\n",
     );
     h.push_str(
         "                                        (--repo, --read-only, --allow-shell a,b,\n",
     );
     h.push_str("                                         --max-steps, --json, --quiet)\n");
-    h.push_str("  zenithal tools                          the tools an agent is given\n");
-    h.push_str("  zenithal tools --json                   ...as the JSON Schema the model sees\n");
+    h.push_str("  stoic-codex tools                          the tools an agent is given\n");
+    h.push_str("  stoic-codex tools --json                   ...as the JSON Schema the model sees\n");
 
     h.push_str("\nMISSION (Strategos plans; N Operator work in N isolated git worktrees)\n");
     h.push_str(
-        "  zenithal mission run <task…>            plan, deploy --agents N worktrees, review,\n",
+        "  stoic-codex mission run <task…>            plan, deploy --agents N worktrees, review,\n",
     );
     h.push_str("                                        apply what Strategos accepted\n");
     h.push_str(
@@ -237,44 +263,44 @@ pub fn help_text() -> String {
         "                                         --keep-worktrees, --keep-branches, --json)\n",
     );
     h.push_str(
-        "  zenithal mission plan <task…>           show the assignments and stop (--json)\n",
+        "  stoic-codex mission plan <task…>           show the assignments and stop (--json)\n",
     );
 
     h.push_str("\nPROVIDERS (BYOK; built-in ids plus any spec you write)\n");
     h.push_str(
-        "  zenithal providers list                 list built-in and user-defined providers\n",
+        "  stoic-codex providers list                 list built-in and user-defined providers\n",
     );
     h.push_str(
-        "  zenithal providers add <file.json>      validate a provider spec and install it\n",
+        "  stoic-codex providers add <file.json>      validate a provider spec and install it\n",
     );
-    h.push_str("  zenithal providers show <id>            show the exact request it would send\n");
+    h.push_str("  stoic-codex providers show <id>            show the exact request it would send\n");
     h.push_str(
-        "  zenithal providers models <id> [--free] list the provider's reported model catalogue\n",
+        "  stoic-codex providers models <id> [--free] list the provider's reported model catalogue\n",
     );
-    h.push_str("  zenithal providers test <id> --model M  send one real completion request and report it\n");
-    h.push_str("  zenithal providers ids                  print every built-in provider id\n");
+    h.push_str("  stoic-codex providers test <id> --model M  send one real completion request and report it\n");
+    h.push_str("  stoic-codex providers ids                  print every built-in provider id\n");
 
     h.push_str("\nMEMORY (local only: a local TypeDB daemon, or a file under ~/");
-    h.push_str(zenithal_brand::CONFIG_DIR);
+    h.push_str(stoic_codex_brand::CONFIG_DIR);
     h.push_str(")\n");
-    h.push_str("  zenithal memory init                    create/open the store\n");
-    h.push_str("  zenithal memory remember <id> <label>   store a memory (--kind, --text, --from, --importance)\n");
-    h.push_str("  zenithal memory link <from> <to> <kind> connect two memories\n");
+    h.push_str("  stoic-codex memory init                    create/open the store\n");
+    h.push_str("  stoic-codex memory remember <id> <label>   store a memory (--kind, --text, --from, --importance)\n");
+    h.push_str("  stoic-codex memory link <from> <to> <kind> connect two memories\n");
     h.push_str(
-        "  zenithal memory recall <query>          rank memories (--focus, --limit, --json)\n",
+        "  stoic-codex memory recall <query>          rank memories (--focus, --limit, --json)\n",
     );
-    h.push_str("  zenithal memory why <query>             show the score breakdown for each hit\n");
-    h.push_str("  zenithal memory forget <id>             drop one memory and its edges\n");
-    h.push_str("  zenithal memory stats                   backend, counts, paths\n");
+    h.push_str("  stoic-codex memory why <query>             show the score breakdown for each hit\n");
+    h.push_str("  stoic-codex memory forget <id>             drop one memory and its edges\n");
+    h.push_str("  stoic-codex memory stats                   backend, counts, paths\n");
 
     h.push_str("\nCONTEXT\n");
     h.push_str(
-        "  zenithal context <query>                print the memory block injected into a prompt\n",
+        "  stoic-codex context <query>                print the memory block injected into a prompt\n",
     );
     h.push_str("                                        (--budget, --system-only, --json)\n");
 
     h.push_str("\nDAEMON\n");
-    h.push_str("  zenithal daemon status                  is a local TypeDB running, and where\n");
+    h.push_str("  stoic-codex daemon status                  is a local TypeDB running, and where\n");
 
     h.push_str("\nGLOBAL\n");
     h.push_str("  --json            machine-readable output where supported\n");

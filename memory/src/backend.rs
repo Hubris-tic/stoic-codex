@@ -97,7 +97,7 @@ pub trait MemoryBackend {
         })
     }
 
-    /// Drop everything. Used by tests and by `zenithal memory reset`.
+    /// Drop everything. Used by tests and by `stoic-codex memory reset`.
     fn clear(&mut self) -> Result<()>;
 
     fn len(&self) -> Result<usize>;

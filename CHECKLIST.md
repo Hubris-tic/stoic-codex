@@ -1,7 +1,9 @@
-# Zenithal — remaining work
+# Stoic Codex — remaining work
 
-Status as of **2026-10-26**. Everything ticked in §A was re-verified in this session; everything
-unticked is either unverified, unscheduled, or blocked on something named in the line.
+Status as of **2026-10-26**. Everything ticked in §A was re-verified in the preceding validation
+round; everything unticked is either unverified, unscheduled, or blocked on something named in
+the line. The current container has no `cargo` or `rustc`, so new Rust changes cannot be compiled
+here until that toolchain is available.
 
 Legend: `[ ]` open · `[x]` done and verified · **S/M/L** = rough size · `live` = verified against
 a real service, not a stub.
@@ -13,7 +15,7 @@ a real service, not a stub.
 These are not features. They are the things that would embarrass you.
 
 **Budget constraint:** live provider verification is limited to the user's free-tier Google AI
-Studio, OpenRouter, Groq, and local models. No paid Anthropic/OpenAI calls, and no hosted Zenithal
+Studio, OpenRouter, Groq, and local models. No paid Anthropic/OpenAI calls, and no hosted Stoic Codex
 service. Rate-card estimates are not billing records; do not infer that an API request was free
 just because its model is listed here.
 
@@ -44,15 +46,15 @@ just because its model is listed here.
       turns, real `functionCall.id`.
 - [x] **No paid-provider live calls.** Anthropic/OpenAI adapters remain covered by offline
       cassettes; paid API keys and paid completions are not a requirement or a release gate.
-- [x] **`zenithal providers models <id> [--free]`** — read-only GET against Gemini, OpenAI-compatible
+- [x] **`stoic-codex providers models <id> [--free]`** — read-only GET against Gemini, OpenAI-compatible
       (Groq/OpenRouter/Ollama/custom) and Anthropic catalogue endpoints; parses IDs, context,
       reported prices, and only explicit free markers/zero prices. CLI e2e test uses loopback and
       proves this sends a GET, not a completion. Unknown price/free-tier status stays unknown.
-- [x] **Google AI Studio catalogue GET** — `zenithal providers models gemini` returned 46
+- [x] **Google AI Studio catalogue GET** — `stoic-codex providers models gemini` returned 46
       chat-capable IDs with context limits; read-only GET, no prompt/completion. Prices and
       free-tier eligibility are not returned by this endpoint.
 - [ ] **OpenRouter/Groq catalogue GETs** — only if their free-tier keys are available:
-      `zenithal providers models openrouter --free` and `zenithal providers models groq`.
+      `stoic-codex providers models openrouter --free` and `stoic-codex providers models groq`.
       Do not run a paid completion. Groq's list may not expose quota eligibility. **S**
 - [ ] **Re-verify the Ollama preset** (`qwen2.5-coder`) against a local daemon, or delete it. **S**
 - [ ] **Streaming usage for providers that send it late**: OpenAI needs
@@ -68,18 +70,22 @@ just because its model is listed here.
 
 ## 2. CLI (S–M each)
 
-- [ ] **Conversation state / `--continue`.** `run` is one turn with the memory block as its only
-      history. Needs a transcript (all messages, not just `[0]`), oldest-first eviction against a
-      **token** budget (`providers::tokens::estimate_messages` exists for exactly this), a session
-      id, and `--continue` / `--resume <id>`. This is the largest CLI gap. **L**
-- [ ] **`zenithal stream` / a transcript renderer** — markdown, tool calls as they happen, diffs
+- [ ] **Conversation state / `--continue`.** Implementation is now written in
+      `cli/src/transcript.rs` and wired into `run`: owner-only local JSON transcripts, canonical
+      user/assistant history, automatic session IDs, `--continue` / `--resume <id>` / `--no-session`,
+      and oldest-complete-turn eviction from the *request copy* using the calibrated token budget.
+      Unit and loopback e2e tests are added, but this remains **unverified**: `cargo`/`rustc` are
+      absent in the current environment, so compile/test validation must be rerun when the Rust
+      toolchain is available. **L**
+- [ ] **`stoic-codex stream` / a transcript renderer** — markdown, tool calls as they happen, diffs
       inline, rather than one line of progress per tool. **M**
-- [ ] **Budget guard before sending**: refuse (or trim) a request whose estimated tokens exceed
-      the model's context, instead of discovering it as a 400. The estimator and
-      `Capabilities.context_window` are both already there — this is wiring. **S**
+- [ ] **Budget guard before sending**: wired into transcript context fitting using provider/model
+      `max_context` and `max_output` capabilities; the current task is never trimmed and an
+      over-budget request fails before provider I/O. Shares the unverified compile/test status
+      above. **S**
 - [ ] **`--max-attempts` flag** mirroring `providers.max_attempts`, for scripts that would rather
       fail fast than wait through backoff. **S**
-- [ ] **`zenithal doctor`** — one command that checks config validity, key presence (never the
+- [ ] **`stoic-codex doctor`** — one command that checks config validity, key presence (never the
       value), daemon reachability, and TLS trust, and exits non-zero on a broken setup. **M**
 - [ ] **Exit codes audit** — the documented contract is 0/1/2 (ok/failed/usage). Add a test per
       command that asserts the code, not just the message. **S**
@@ -104,7 +110,9 @@ just because its model is listed here.
 - [ ] **Regenerate previews after any layout change** —
       `cd tui && cargo run -q --example snapshot && cargo run -q --example frames \
       && python3 render_preview.py && python3 render_preview.py --gif`. Previews are part of the
-      docs, so a stale one is a wrong claim. **S** (currently fresh)
+      docs, so a stale one is a wrong claim. The Stoic Codex header, underline, and mission branch
+      labels were patched into the cell grids and re-rasterized, but the Rust snapshot example
+      could not run here; regenerate from the compiled views when tooling is available. **S**
 - [ ] **A 40-column terminal.** `mission-narrow.png` is 84×22; below ~60 columns the assignment
       column collapses to nothing and the code column is the only identifier left. Decide and
       test. **S**
@@ -122,7 +130,7 @@ just because its model is listed here.
       and a cap on total wall clock. **M**
 - [ ] **Partial failure policy** — if 2 of 3 operators fail, the mission currently reviews what it
       has. Decide whether that is a success, and say so in the report line and the exit code. **S**
-- [ ] **Worktree cleanup** — `.git/zenithal-missions/<code>` is never pruned; a tenth mission
+- [ ] **Worktree cleanup** — `.git/stoic-codex-missions/<code>` is never pruned; a tenth mission
       leaves nine stale trees and their branches. **S**
 - [ ] **`--parallel` scheduling test** with a slow model: assert the wall clock is closer to
       max(t) than sum(t). **S**
@@ -149,7 +157,7 @@ just because its model is listed here.
 ## 6. Fork integration (the upstream-facing work, M–L)
 
 - [ ] **`cargo check -p codex-tui -p codex-cli`** on a machine that can build the ~2.1M-line
-      workspace. `patches/0001-zenithal-tui-brand.patch` applies cleanly but **compilation is
+      workspace. `patches/0001-stoic-codex-tui-brand.patch` applies cleanly but **compilation is
       unverified** — it says so in `PATCHES.md`, and that caveat is the whole risk.
 - [ ] **Drop `desktop_app`** from the workspace and remove the doctor's signer checks — both ship
       OpenAI's signed binary / assume OpenAI's signatures. Not present in this tree because this
@@ -168,9 +176,11 @@ just because its model is listed here.
 - [x] `providers/LIVE.md` — the live record, both wire bugs, the token calibration table.
 - [x] `providers/README.md`, `cli/README.md`, `agent/README.md`, `tui/DESIGN.md`,
       `tui/WORKLOG.md`, root `README.md` refreshed to the current counts.
-- [ ] `AGENTIC-UPGRADE-PLAN.md` and `GITHUB_TOKEN_SETUP.md` still say **Nizari** in prose.
-- [ ] `NAMING.md` has no entry for the **Phalanx code names** (`x0-core` … `x7-trace`), which are
-      now user-visible strings in logs, commits and the TUI.
+- [x] `AGENTIC-UPGRADE-PLAN.md` and `GITHUB_TOKEN_SETUP.md` updated to the Stoic Codex name and
+      `Hubris-tic/stoic-codex` destination (workspace-level docs outside the repo are not part of
+      the source commit).
+- [x] `NAMING.md` documents the **Phalanx code names** (`x0-core` … `x7-trace`) and preserves
+      upstream identifiers.
 - [ ] `INTEGRATION.md` §2 still describes `WireAdapter` as lacking `capabilities()`.
 - [ ] A `SECURITY.md`: key handling, what is never logged, how to report a leak.
 
@@ -184,14 +194,32 @@ just because its model is listed here.
 - [ ] One live mission: 3 operators, real repo, real worktrees, one commit, using a provider the
       user confirms is within their free quota (or local); label rate-card cost as an estimate, not
       an invoice. No paid-provider calls.
-- [ ] `git grep` for `Nizari`, `Fedayeen`, `codex-rs`, `openai/codex` outside the places
-      `NAMING.md` allows.
+- [ ] Search for obsolete pre-fork product terms; keep upstream identifiers only where
+      `NAMING.md` documents them.
 - [ ] Preview PNG/GIF regenerated from the shipped views in the same commit as the layout change.
 - [ ] Keys and PATs revoked; the leak checklist in §0 ticked.
 
 ---
 
-## A. Done in this session — with the evidence, so it does not get re-litigated
+## 9. Active request — Stoic Codex public rename and sync
+
+The selected public destination is `Hubris-tic/stoic-codex`; push only to the existing branch
+`agent/zenithal-workspace-sync-2026-10-26`. Do not push to `main`. Preserve upstream identifiers
+and include the pre-existing transcript/context-budget work in the same workspace sync.
+
+- [ ] Review the source rebrand, `.zenithal` config migration, and `ZENITHAL_*` compatibility
+      aliases; the code is written but **not compiled or tested** in this environment.
+- [ ] Transfer the verified-in-working-tree changes into `/var/tmp/zenithal-push`, scan the full
+      diff and secrets, then commit and push to the selected feature branch only.
+- [ ] Rename the GitHub repository to `Hubris-tic/stoic-codex`, update the local push remote, and
+      verify the branch points to the new commit. No `main` push.
+- [ ] Revoke both pasted GitHub PATs at the end, keep only the keeper PAT's rotated successor, and
+      rotate the Gemini key; never print or commit any credential value.
+
+## A. Verified in the preceding validation round — with the evidence, so it does not get re-litigated
+
+The suite counts below predate the new local transcript implementation and tests. They are
+historical verified results, not validation of the current working-tree changes.
 
 | Item | Evidence |
 |---|---|

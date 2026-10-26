@@ -1,7 +1,7 @@
 //! Mission board: Strategos on the top row, The Phalanx below, and the selected operator's
 //! report on the right.
 //!
-//! Ordering comes from `zenithal_ui_core::mission::Mission::display_order`, which pins the
+//! Ordering comes from `stoic_codex_ui_core::mission::Mission::display_order`, which pins the
 //! boss and is stable across redraws. The board is drawn without borders: a dim column
 //! header, a red-tinted rule under the boss, one red selection bar, and the rest is
 //! whitespace and grey.
@@ -10,12 +10,12 @@
 //!  CODE       BRANCH             CONTEXT      RESULT      ASSIGNMENT
 //!  ◆ Strategos —                 ▰▰▰▰▰▰▰▰▰▰  done        plan + review
 //!  ─── (red hairline) ────────────────────────────────────────────────────
-//!    ✓ x1-write  zenithal/x1-write  ▰▰▰▰▰▰▰▰▰▰  accepted    retry backoff
-//!  ▏ ▶ x7-trace  zenithal/x7-trace  ▰▰▰▰▰▰░░░░  running     key rotation
-//!    ✗ x5-patch  zenithal/x5-patch  ▰▰▰░░░░░░░  rejected    error mapping
+//!    ✓ x1-write  stoic-codex/x1-write  ▰▰▰▰▰▰▰▰▰▰  accepted    retry backoff
+//!  ▏ ▶ x7-trace  stoic-codex/x7-trace  ▰▰▰▰▰▰░░░░  running     key rotation
+//!    ✗ x5-patch  stoic-codex/x5-patch  ▰▰▰░░░░░░░  rejected    error mapping
 //! ```
 
-use zenithal_ui_core::mission::{Activity, ActivityKind, Agent, AgentState, Mission, Verdict};
+use stoic_codex_ui_core::mission::{Activity, ActivityKind, Agent, AgentState, Mission, Verdict};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -411,7 +411,7 @@ fn render_board(frame: &mut Frame, area: Rect, state: &MissionBoardState) {
     if state.mission.agents.is_empty() {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  no mission yet — `zenithal mission run <task>` deploys one",
+            "  no mission yet — `stoic-codex mission run <task>` deploys one",
             t::faint(),
         )));
     }
@@ -624,13 +624,13 @@ pub fn visible_rows(height: u16) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenithal_ui_core::mission::{AgentRole, Mission};
+    use stoic_codex_ui_core::mission::{AgentRole, Mission};
 
     fn agent(role: AgentRole, state: AgentState, progress: u8) -> Agent {
         let mut a = Agent::new("x1-write", role, "task");
         a.state = state;
         a.progress = progress;
-        a.branch = Some("zenithal/x1-write".into());
+        a.branch = Some("stoic-codex/x1-write".into());
         a.micros = 420_000;
         a
     }
@@ -697,7 +697,7 @@ mod tests {
                 let row_chars: Vec<char> = row.chars().collect();
                 let at: String = row_chars[col.min(row_chars.len())..].iter().skip_while(|c| **c == ' ').collect();
                 assert!(
-                    at.starts_with("zenithal/x1-write"),
+                    at.starts_with("stoic-codex/x1-write"),
                     "width {width}: expected the branch at col {col}, got {at:?}"
                 );
             }
@@ -723,12 +723,12 @@ mod tests {
         boss.state = AgentState::Running;
         let boss_row = text_of(&agent_row(&boss, 120, false));
         assert!(boss_row.contains("Strategos"), "{boss_row}");
-        assert!(!boss_row.contains("zenithal/"), "the boss has no branch: {boss_row}");
+        assert!(!boss_row.contains("stoic-codex/"), "the boss has no branch: {boss_row}");
 
         let mut fed = agent(AgentRole::Operator, AgentState::Done, 100);
         fed.verdict = Verdict::Accepted;
         let fed_row = text_of(&agent_row(&fed, 120, false));
-        assert!(fed_row.contains("zenithal/x1-write"), "{fed_row}");
+        assert!(fed_row.contains("stoic-codex/x1-write"), "{fed_row}");
         assert!(fed_row.contains("accepted"), "{fed_row}");
     }
 
@@ -784,7 +784,7 @@ mod tests {
             .iter()
             .map(|c| c.symbol())
             .collect();
-        assert!(screen.contains("zenithal mission run"), "{screen}");
+        assert!(screen.contains("stoic-codex mission run"), "{screen}");
     }
 
     #[test]

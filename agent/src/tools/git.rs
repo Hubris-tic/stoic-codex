@@ -120,7 +120,7 @@ mod tests {
     impl Repo {
         fn new(tag: &str) -> Repo {
             let dir = std::env::temp_dir().join(format!(
-                "zenithal-git-{tag}-{}-{:?}",
+                "stoic-codex-git-{tag}-{}-{:?}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

@@ -3,7 +3,7 @@
 
 //! A one-shot HTTP server on loopback, for tests that need a real socket.
 //!
-//! The point is fidelity: `zenithal run` is tested through its actual transport, so the
+//! The point is fidelity: `stoic-codex run` is tested through its actual transport, so the
 //! request line, headers, framing and streaming are all exercised — while still touching
 //! nothing outside 127.0.0.1 and needing no key, no vendor, and no network.
 

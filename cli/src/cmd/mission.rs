@@ -1,13 +1,13 @@
-//! `zenithal mission run` — Strategos plans, the Phalanx executes, Strategos reviews.
+//! `stoic-codex mission run` — Strategos plans, the Phalanx executes, Strategos reviews.
 //!
-//! The command is a thin shell around `zenithal_agent::run_mission`. What it adds is the part
+//! The command is a thin shell around `stoic_codex_agent::run_mission`. What it adds is the part
 //! the library deliberately refuses to own: resolving providers, printing progress a human
 //! can follow while three agents type at once, and deciding an exit code.
 
 use std::io::Write;
 use std::path::PathBuf;
 
-use zenithal_agent::{
+use stoic_codex_agent::{
     provisional_name, run_mission, AgentConfig, Event, MissionConfig, MissionEvent, Operator,
     OperatorState, Repo, Verdict, VerifyCommand, PHALANX, STRATEGOS,
 };
@@ -27,8 +27,8 @@ pub fn run(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             "unknown `mission` subcommand `{other}` (run, plan)"
         ))),
         None => Err(CmdError::usage(
-            "usage: zenithal mission run <task…> [--agents 3] [--repo DIR] [--verify CMD]\n\
-             \x20      zenithal mission plan <task…>         show what Strategos would assign",
+            "usage: stoic-codex mission run <task…> [--agents 3] [--repo DIR] [--verify CMD]\n\
+             \x20      stoic-codex mission plan <task…>         show what Strategos would assign",
         )),
     }
 }
@@ -46,6 +46,7 @@ fn resolve(parsed: &Parsed, paths: &Paths) -> Result<(Config, Resolved), CmdErro
     let provider = parsed
         .value("provider")
         .map(str::to_string)
+        .or_else(|| std::env::var("STOIC_CODEX_PROVIDER").ok())
         .or_else(|| std::env::var("ZENITHAL_PROVIDER").ok())
         .or_else(|| cfg.providers.default.clone())
         .ok_or_else(|| {
@@ -105,7 +106,7 @@ fn agent_config(
     Ok(agent)
 }
 
-/// `zenithal mission plan` — one Strategos call, printed. No worktrees, no agents, no spend
+/// `stoic-codex mission plan` — one Strategos call, printed. No worktrees, no agents, no spend
 /// beyond a single planning turn.
 fn plan_only(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let task = parsed.rest()[1.min(parsed.rest().len())..]
@@ -114,27 +115,27 @@ fn plan_only(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         .to_string();
     if task.is_empty() {
         return Err(CmdError::usage(
-            "usage: zenithal mission plan <task…> [--agents 3] [--repo DIR]",
+            "usage: stoic-codex mission plan <task…> [--agents 3] [--repo DIR]",
         ));
     }
     let (cfg, resolved) = resolve(parsed, paths)?;
     let n = agent_count(parsed)?;
     let codenames: Vec<String> = (1..=n).map(provisional_name).collect();
-    let layout = zenithal_agent::strategos::repo_layout(resolved.repo.root());
+    let layout = stoic_codex_agent::strategos::repo_layout(resolved.repo.root());
 
     let strategos = RemoteModel::new(&resolved.provider, paths, &cfg, Some(&resolved.model))
         .map_err(CmdError::failed)?;
-    let mut request = zenithal_agent::strategos::strategos_plan_prompt(&task, &layout, &codenames);
+    let mut request = stoic_codex_agent::strategos::strategos_plan_prompt(&task, &layout, &codenames);
     request.model = resolved.model.clone();
     request.max_tokens = cfg.providers.max_tokens;
 
-    use zenithal_agent::Model;
+    use stoic_codex_agent::Model;
     let response = strategos
         .complete(&request)
         .map_err(|e| CmdError::failed(format!("{STRATEGOS} could not plan: {e}")))?;
-    let mut renamed = zenithal_agent::strategos::parse_plan(&response.text(), &codenames, &task);
+    let mut renamed = stoic_codex_agent::strategos::parse_plan(&response.text(), &codenames, &task);
     // Naming is part of planning, so a preview shows the codes the mission would deploy.
-    let renames = zenithal_agent::strategos::name_codes(&codenames, &mut renamed);
+    let renames = stoic_codex_agent::strategos::name_codes(&codenames, &mut renamed);
 
     if parsed.switch("json") {
         let payload = serde_json::json!({
@@ -169,7 +170,7 @@ fn plan_only(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             row(
                 "[strategos]",
                 "name",
-                &format!("{old:<10} → {}", zenithal_agent::code_line(code))
+                &format!("{old:<10} → {}", stoic_codex_agent::code_line(code))
             )
         );
     }
@@ -181,7 +182,7 @@ fn plan_only(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             row(&format!("[{}]", a.codename), "task", &a.task)
         );
     }
-    if renamed.source == zenithal_agent::PlanSource::Fallback {
+    if renamed.source == stoic_codex_agent::PlanSource::Fallback {
         let _ = writeln!(
             ctx.err,
             "note: the plan was not machine-readable, so every {PHALANX} would be given the \
@@ -199,7 +200,7 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         .to_string();
     if task.is_empty() {
         return Err(CmdError::usage(
-            "usage: zenithal mission run <task…> [--agents 3] [--repo DIR] [--base REF]\n\
+            "usage: stoic-codex mission run <task…> [--agents 3] [--repo DIR] [--base REF]\n\
              \x20      [--verify \"cargo test\"] [--no-review] [--no-commit] [--keep-worktrees]\n\
              \x20      [--keep-branches] [--parallel N] [--provider ID] [--model M] [--json]",
         ));
@@ -352,7 +353,7 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
 
 /// Exit code: a mission where nothing usable landed is a failure even if every model
 /// answered politely.
-fn finish(report: &zenithal_agent::MissionReport) -> CmdResult {
+fn finish(report: &stoic_codex_agent::MissionReport) -> CmdResult {
     if report.applied_count() == 0 {
         let failed = report
             .operators
@@ -399,7 +400,7 @@ fn log_line(event: &MissionEvent) -> String {
                 row(
                     "[strategos]",
                     "name",
-                    &format!("{slot:<10} → {}", zenithal_agent::code_line(code)),
+                    &format!("{slot:<10} → {}", stoic_codex_agent::code_line(code)),
                 )
             })
             .collect::<Vec<_>>()
@@ -505,13 +506,13 @@ fn log_line(event: &MissionEvent) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenithal_agent::{Event, OperatorState, Plan, PlanSource, Verdict};
+    use stoic_codex_agent::{Event, OperatorState, Plan, PlanSource, Verdict};
 
     fn plan() -> Plan {
         Plan {
             assignments: vec![
-                zenithal_agent::Assignment::with_code("x1-write", "x1-write", "add the parser"),
-                zenithal_agent::Assignment::with_code("x2-check", "x2-check", "add tests for it"),
+                stoic_codex_agent::Assignment::with_code("x1-write", "x1-write", "add the parser"),
+                stoic_codex_agent::Assignment::with_code("x2-check", "x2-check", "add tests for it"),
             ],
             source: PlanSource::Strategos,
             raw: String::new(),
@@ -525,7 +526,7 @@ mod tests {
             MissionEvent::Planned { plan: plan() },
             MissionEvent::Deployed {
                 codename: "x1-write".into(),
-                branch: "zenithal/x1-write".into(),
+                branch: "stoic-codex/x1-write".into(),
             },
             MissionEvent::Agent {
                 codename: "x2-check".into(),

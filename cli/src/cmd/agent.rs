@@ -1,4 +1,4 @@
-//! `zenithal agent run` — one agent, with tools, in this repository.
+//! `stoic-codex agent run` — one agent, with tools, in this repository.
 //!
 //! The single-agent path exists for two reasons: it is the smallest thing that proves the
 //! tool loop works against a real provider, and it is what most tasks actually need. The
@@ -8,8 +8,8 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use zenithal_agent::tools::shell::ShellPolicy;
-use zenithal_agent::{run_agent, AgentConfig, Event, Sandbox, ToolRegistry};
+use stoic_codex_agent::tools::shell::ShellPolicy;
+use stoic_codex_agent::{run_agent, AgentConfig, Event, Sandbox, ToolRegistry};
 
 use crate::args::Parsed;
 use crate::cmd::{CmdError, CmdResult};
@@ -26,7 +26,7 @@ pub fn run(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             "unknown `agent` subcommand `{other}` (run, tools)"
         ))),
         None => Err(CmdError::usage(
-            "usage: zenithal agent <run|tools> [options]",
+            "usage: stoic-codex agent <run|tools> [options]",
         )),
     }
 }
@@ -36,7 +36,7 @@ fn one(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let task = rest[1..].join(" ").trim().to_string();
     if task.is_empty() {
         return Err(CmdError::usage(
-            "usage: zenithal agent run <task…> [--provider ID] [--model M] [--repo DIR] \
+            "usage: stoic-codex agent run <task…> [--provider ID] [--model M] [--repo DIR] \
              [--allow-shell a,b] [--read-only] [--max-steps N]",
         ));
     }
@@ -47,6 +47,7 @@ fn one(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let provider = parsed
         .value("provider")
         .map(str::to_string)
+        .or_else(|| std::env::var("STOIC_CODEX_PROVIDER").ok())
         .or_else(|| std::env::var("ZENITHAL_PROVIDER").ok())
         .or_else(|| cfg.providers.default.clone())
         .ok_or_else(|| {
@@ -202,7 +203,7 @@ pub fn system_prompt(repo: &std::path::Path) -> String {
          Every path you pass to a tool is relative to the repository root. You cannot reach \
          outside it, and `.git` is off limits. When you are done, answer in one short \
          paragraph describing what you changed — no code blocks, no restating the task.",
-        zenithal_brand::NAME,
+        stoic_codex_brand::NAME,
         repo.display()
     )
 }

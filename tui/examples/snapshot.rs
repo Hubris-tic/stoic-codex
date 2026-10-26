@@ -12,11 +12,11 @@
 use std::fs;
 use std::path::Path;
 
-use zenithal_tui_views::views::{
+use stoic_codex_tui_views::views::{
     blackhole::BlackHoleAnim, diff_review::DiffReviewState, memory_graph::MemoryGraphState,
     mission_board::MissionBoardState,
 };
-use zenithal_ui_core::{
+use stoic_codex_ui_core::{
     diff,
     graph::{EdgeKind, Graph, Node, NodeKind},
     mission::{Activity, ActivityKind, Agent, AgentState, Mission, Verdict},
@@ -114,7 +114,7 @@ fn serde_json_string(s: &str) -> String {
 /// A mission mid-flight: the boss has reviewed, one operator landed, one is still working,
 /// one collided with another agent's file.
 fn mission() -> Mission {
-    let mut m = Mission::new("refactor-auth", "zenithal");
+    let mut m = Mission::new("refactor-auth", "stoic-codex");
     m.base = "main".into();
     m.budget_micros = 3_000_000;
 
@@ -170,8 +170,8 @@ fn mission() -> Mission {
     assert_eq!(m.name_phalanx(&renames), 3, "the fixture must rename the board");
     for code in ["x1-write", "x7-trace", "x5-patch"] {
         if let Some(a) = m.agents.iter_mut().find(|a| a.id == code) {
-            a.branch = Some(format!("zenithal/{code}"));
-            a.worktree = Some(format!(".git/zenithal-missions/{code}"));
+            a.branch = Some(format!("stoic-codex/{code}"));
+            a.worktree = Some(format!(".git/stoic-codex-missions/{code}"));
         }
     }
 
@@ -180,9 +180,9 @@ fn mission() -> Mission {
     let feed: &[(u64, ActivityKind, Option<&str>, &str)] = &[
         (0, ActivityKind::Plan, None, "planning the mission"),
         (2, ActivityKind::Plan, None, "3 assignments, one per code"),
-        (3, ActivityKind::Deploy, Some("x1-write"), "deployed on zenithal/x1-write"),
-        (3, ActivityKind::Deploy, Some("x7-trace"), "deployed on zenithal/x7-trace"),
-        (4, ActivityKind::Deploy, Some("x5-patch"), "deployed on zenithal/x5-patch"),
+        (3, ActivityKind::Deploy, Some("x1-write"), "deployed on stoic-codex/x1-write"),
+        (3, ActivityKind::Deploy, Some("x7-trace"), "deployed on stoic-codex/x7-trace"),
+        (4, ActivityKind::Deploy, Some("x5-patch"), "deployed on stoic-codex/x5-patch"),
         (8, ActivityKind::Tool, Some("x1-write"), "write_file src/auth.rs"),
         (11, ActivityKind::Result, Some("x1-write"), "ok write_file (2ms) 41 lines"),
         (14, ActivityKind::Tool, Some("x7-trace"), "search \"sleep(Duration\" src/"),
@@ -262,7 +262,7 @@ fn main() {
     snapshot("mission", |f| {
         let state = MissionBoardState::new(mission());
         let area = f.area();
-        zenithal_tui_views::views::mission_board::render_screen(f, area, &state);
+        stoic_codex_tui_views::views::mission_board::render_screen(f, area, &state);
     });
 
     // The same board on a small laptop terminal: branch column dropped, report pane folded
@@ -271,19 +271,19 @@ fn main() {
     snapshot_at("mission-narrow", W_NARROW, H_NARROW, |f| {
         let state = MissionBoardState::new(mission());
         let area = f.area();
-        zenithal_tui_views::views::mission_board::render_screen(f, area, &state);
+        stoic_codex_tui_views::views::mission_board::render_screen(f, area, &state);
     });
 
     snapshot("diff", |f| {
         let state = diff_state();
         let area = f.area();
-        zenithal_tui_views::views::diff_review::render_screen(f, area, &state);
+        stoic_codex_tui_views::views::diff_review::render_screen(f, area, &state);
     });
 
     snapshot("memory", |f| {
         let mut state = memory();
         let area = f.area();
-        zenithal_tui_views::views::memory_graph::render_screen(f, area, &mut state);
+        stoic_codex_tui_views::views::memory_graph::render_screen(f, area, &mut state);
     });
 
     // The hole tab: real integrated geodesics, parked at a fixed phase. A snapshot has to be
@@ -292,7 +292,7 @@ fn main() {
     anim.phase = 1.1;
     snapshot("hole", |f| {
         let area = f.area();
-        zenithal_tui_views::views::blackhole::render_screen(f, area, &mut anim);
+        stoic_codex_tui_views::views::blackhole::render_screen(f, area, &mut anim);
     });
 
     // Same hole, laptop-sized: the facts foot is dropped, the image is not.
@@ -300,6 +300,6 @@ fn main() {
     narrow_anim.phase = 2.4;
     snapshot_at("hole-narrow", W_NARROW, H_NARROW, |f| {
         let area = f.area();
-        zenithal_tui_views::views::blackhole::render_screen(f, area, &mut narrow_anim);
+        stoic_codex_tui_views::views::blackhole::render_screen(f, area, &mut narrow_anim);
     });
 }

@@ -1,4 +1,4 @@
-# Zenithal — memory schema for TypeDB 3.x
+# Stoic Codex — memory schema for TypeDB 3.x
 #
 # Load with:
 #   typedb server                    # separate process, gRPC on :1729
@@ -23,7 +23,7 @@ attribute confidence value double;     # 0..1, for inferred edges
 attribute note value string;
 
 # Embeddings, portable form: comma-separated f32, scored in-process by
-# `zenithal-memory::scoring`. Works on every TypeDB 3.x.
+# `stoic-codex-memory::scoring`. Works on every TypeDB 3.x.
 attribute embedding-text value string;
 
 # Native vector form. Alpha upstream (3.7+); uncomment only when it is stable —

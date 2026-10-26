@@ -8,7 +8,7 @@ index 79c0dae..355cf39 100644
 -# Dates are UTC, formatted as YYYY-MM-DD. The from_date is inclusive and the to_date is exclusive.
 -# version_regex matches against the CLI version (env!("CARGO_PKG_VERSION")); omit to apply to all versions.
 -# target_app specify which app should display the announcement (cli, vsce, ...).
-+# Announcement tips served to Zenithal clients.
++# Announcement tips served to Stoic Codex clients.
 +#
 +# The TUI fetches this file from our repository (see codex-rs/tui/src/tooltips.rs).
 +# Schema matches upstream: entries are evaluated in order, the last match wins.
@@ -26,7 +26,7 @@ index 79c0dae..355cf39 100644
 -# Matches 0.x.y versions from 0.0.y through 0.119.y; excludes 0.120.0 and newer.
 -version_regex = "^0\\.(?:[0-9]|[1-9][0-9]|1[01][0-9])\\."
 -to_date = "2026-05-08"
-+content = "Zenithal is a fork of openai/codex. Your data, models and keys stay yours: run `/model` to switch provider."
++content = "Stoic Codex is a fork of openai/codex. Your data, models and keys stay yours: run `/model` to switch provider."
 +from_date = "2026-01-01"
 +to_date = "2027-01-01"
 diff --git a/codex-rs/cli/src/app_cmd.rs b/codex-rs/cli/src/app_cmd.rs
@@ -48,13 +48,13 @@ index 44c22b6..d49d7a3 100644
 -    }
 +    // NIZARI: disabled. Upstream `app` downloads and installs OpenAI's signed desktop
 +    // application (Codex.dmg on macOS, OpenAI.Codex MSIX on Windows). That binary is not
-+    // part of Zenithal, and installing it silently would be both misleading and
++    // part of Stoic Codex, and installing it silently would be both misleading and
 +    // unverifiable for us. Re-enable only when we ship our own desktop client.
 +    let _ = (cmd.path, cmd.download_url_override);
 +    anyhow::bail!(
-+        "`app` is disabled in Zenithal: it would install OpenAI's desktop application, \
++        "`app` is disabled in Stoic Codex: it would install OpenAI's desktop application, \
 +         which is not part of this project. Track progress at {}",
-+        "https://github.com/Hubris-tic/zenithal/issues"
++        "https://github.com/Hubris-tic/stoic-codex/issues"
 +    )
  }
 diff --git a/codex-rs/cli/src/desktop_app/mac.rs b/codex-rs/cli/src/desktop_app/mac.rs
@@ -66,10 +66,10 @@ index fb5a442..43929e5 100644
  const CODEX_BUNDLE_IDENTIFIER: &str = "com.openai.codex";
  const OPENAI_APPLE_TEAM_IDENTIFIER: &str = "2DC432GLL2";
 +// INERT: `app` subcommand bails before reaching this module (see cli/src/app_cmd.rs).
-+// zenithal:allow-upstream-url -- kept only so the module compiles; never fetched.
++// stoic-codex:allow-upstream-url -- kept only so the module compiles; never fetched.
  const CODEX_DMG_URL_ARM64: &str = "https://persistent.oaistatic.com/codex-app-prod/Codex.dmg";
  const CODEX_DMG_URL_X64: &str =
-+    // zenithal:allow-upstream-url -- INERT, see note above.
++    // stoic-codex:allow-upstream-url -- INERT, see note above.
      "https://persistent.oaistatic.com/codex-app-prod/Codex-latest-x64.dmg";
  
  pub async fn run_mac_app_open_or_install(
@@ -82,21 +82,21 @@ index fbad7d9..726c0f2 100644
  
  const VERSION_FILE_NAME: &str = "version.json";
 -const GITHUB_LATEST_RELEASE_URL: &str = "https://api.github.com/repos/openai/codex/releases/latest";
-+const GITHUB_LATEST_RELEASE_URL: &str = "https://api.github.com/repos/Hubris-tic/zenithal/releases/latest";
-+// zenithal:allow-upstream-url -- INERT: no Homebrew cask exists for this fork; the check
++const GITHUB_LATEST_RELEASE_URL: &str = "https://api.github.com/repos/Hubris-tic/stoic-codex/releases/latest";
++// stoic-codex:allow-upstream-url -- INERT: no Homebrew cask exists for this fork; the check
 +// will simply report the cask as unavailable.
  const HOMEBREW_CASK_API_URL: &str = "https://formulae.brew.sh/api/cask/codex.json";
  #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-+// zenithal:allow-upstream-url -- INERT: desktop app is not installable in Zenithal.
++// stoic-codex:allow-upstream-url -- INERT: desktop app is not installable in Stoic Codex.
  const DESKTOP_UPDATE_URL: &str = "https://persistent.oaistatic.com/codex-app-prod/appcast-x64.xml";
  #[cfg(all(target_os = "macos", not(target_arch = "x86_64")))]
-+// zenithal:allow-upstream-url -- INERT, see above.
++// stoic-codex:allow-upstream-url -- INERT, see above.
  const DESKTOP_UPDATE_URL: &str = "https://persistent.oaistatic.com/codex-app-prod/appcast.xml";
  #[cfg(target_os = "macos")]
  const BACKEND_DESKTOP_UPDATE_URL: &str = "https://chatgpt.com/backend-api/wham/app/appcast";
  #[cfg(target_os = "windows")]
  const DESKTOP_UPDATE_URL: &str =
-+    // zenithal:allow-upstream-url -- INERT, see note above.
++    // stoic-codex:allow-upstream-url -- INERT, see note above.
      "https://persistent.oaistatic.com/codex-app-prod/windows-store-update.json";
  
  /// Builds the update-health row for the current installation.
@@ -109,11 +109,11 @@ index fbad7d9..726c0f2 100644
 -        InstallMethod::VitePlus => "vp install -g @openai/codex",
 -        InstallMethod::Pnpm => "pnpm add -g @openai/codex",
 -        InstallMethod::Brew => "brew upgrade --cask codex",
-+        InstallMethod::Npm => "self-update disabled in Zenithal",
-+        InstallMethod::Bun => "self-update disabled in Zenithal",
-+        InstallMethod::VitePlus => "self-update disabled in Zenithal",
-+        InstallMethod::Pnpm => "self-update disabled in Zenithal",
-+        InstallMethod::Brew => "self-update disabled in Zenithal",
++        InstallMethod::Npm => "self-update disabled in Stoic Codex",
++        InstallMethod::Bun => "self-update disabled in Stoic Codex",
++        InstallMethod::VitePlus => "self-update disabled in Stoic Codex",
++        InstallMethod::Pnpm => "self-update disabled in Stoic Codex",
++        InstallMethod::Brew => "self-update disabled in Stoic Codex",
          InstallMethod::Standalone { .. } => "standalone installer",
          InstallMethod::Other => "manual or unknown",
      }
@@ -126,7 +126,7 @@ index ada9e88..bc3f1d1 100644
              )
          } else if self.daemon_cli_executable.is_none() {
 -            Some("Run the Codex CLI to manage the daemon from this menu.")
-+            Some("Run the zenithal CLI to manage the daemon from this menu.")
++            Some("Run the stoic-codex CLI to manage the daemon from this menu.")
          } else {
              None
          };
@@ -140,7 +140,7 @@ index f576f13..ba93f7a 100644
  const BASE_CLI_BUG_ISSUE_URL: &str =
 -    "https://github.com/openai/codex/issues/new?template=3-cli.yml";
 +    // NIZARI: was openai/codex's tracker, which we cannot triage.
-+    "https://github.com/Hubris-tic/zenithal/issues/new";
++    "https://github.com/Hubris-tic/stoic-codex/issues/new";
  /// Internal routing link for employee feedback follow-ups. This must not be shown to external users.
  const CODEX_FEEDBACK_INTERNAL_URL: &str = "http://go/codex-feedback-internal";
  
@@ -154,7 +154,7 @@ index 5cc3862..a859edf 100644
  
 -const MEMORIES_DOC_URL: &str = "https://developers.openai.com/codex/memories";
 +// NIZARI: upstream pointed at OpenAI's docs; our memory model will differ.
-+const MEMORIES_DOC_URL: &str = "https://github.com/Hubris-tic/zenithal/tree/main/docs";
++const MEMORIES_DOC_URL: &str = "https://github.com/Hubris-tic/stoic-codex/tree/main/docs";
  
  #[derive(Clone, Copy, PartialEq, Eq)]
  enum MemoriesSetting {
@@ -167,7 +167,7 @@ index 9567424..f405f1c 100644
                  "Remaining usage on the secondary usage limit (omitted when unavailable)"
              }
 -            StatusLineItem::CodexVersion => "Codex application version",
-+            StatusLineItem::CodexVersion => "Zenithal application version",
++            StatusLineItem::CodexVersion => "Stoic Codex application version",
              StatusLineItem::ContextWindowSize => {
                  "Total context window size in tokens (omitted when unknown)"
              }
@@ -180,7 +180,7 @@ index 145938b..5c31db0 100644
      pub(crate) fn description(self) -> &'static str {
          match self {
 -            TerminalTitleItem::AppName => "Codex app name",
-+            TerminalTitleItem::AppName => "Zenithal app name",
++            TerminalTitleItem::AppName => "Stoic Codex app name",
              TerminalTitleItem::Project => "Project name (falls back to current directory name)",
              TerminalTitleItem::CurrentDir => "Current working directory",
              TerminalTitleItem::Spinner => {
@@ -189,7 +189,7 @@ index 145938b..5c31db0 100644
                  "Remaining usage on the secondary usage limit (omitted when unavailable)"
              }
 -            TerminalTitleItem::CodexVersion => "Codex application version",
-+            TerminalTitleItem::CodexVersion => "Zenithal application version",
++            TerminalTitleItem::CodexVersion => "Stoic Codex application version",
              TerminalTitleItem::UsedTokens => "Total tokens used in session (omitted when zero)",
              TerminalTitleItem::TotalInputTokens => "Total input tokens used in session",
              TerminalTitleItem::TotalOutputTokens => "Total output tokens used in session",
@@ -202,7 +202,7 @@ index 0607a8c..25fee3f 100644
                              "›".bold(),
                              " ".into(),
 -                            "Ask Codex to do anything".dim(),
-+                            "Ask Zenithal to do anything".dim(),
++                            "Ask Stoic Codex to do anything".dim(),
                          ]),
                      ])
                      .render(frame.area(), frame.buffer_mut());
@@ -216,7 +216,7 @@ index 06d7b2f..850291c 100644
                  "See ",
 -                "https://github.com/openai/codex"
 +                // NIZARI: was openai/codex.
-+                "https://github.com/Hubris-tic/zenithal"
++                "https://github.com/Hubris-tic/stoic-codex"
                      .fg(accent_color())
                      .underlined(),
                  " for installation options."
@@ -226,7 +226,7 @@ index 06d7b2f..850291c 100644
              "See full release notes:",
 -            "https://github.com/openai/codex/releases/latest"
 +            // NIZARI: our releases, not upstream's.
-+            "https://github.com/Hubris-tic/zenithal/releases/latest"
++            "https://github.com/Hubris-tic/stoic-codex/releases/latest"
                  .fg(accent_color())
                  .underlined(),
          ];
@@ -235,7 +235,7 @@ index 06d7b2f..850291c 100644
              format!("Run {} to update.", update_action.command_str())
          } else {
 -            "See https://github.com/openai/codex for installation options.".to_string()
-+            "See https://github.com/Hubris-tic/zenithal for installation options.".to_string()
++            "See https://github.com/Hubris-tic/stoic-codex for installation options.".to_string()
          };
          vec![
              Line::from("Update available!"),
@@ -244,7 +244,7 @@ index 06d7b2f..850291c 100644
              Line::from(""),
              Line::from("See full release notes:"),
 -            Line::from("https://github.com/openai/codex/releases/latest"),
-+            Line::from("https://github.com/Hubris-tic/zenithal/releases/latest"),
++            Line::from("https://github.com/Hubris-tic/stoic-codex/releases/latest"),
          ]
      }
  
@@ -257,7 +257,7 @@ index 237ef9e..7a61054 100644
      vec![
          ">_ ".fg(accent_color()),
 -        "OpenAI Codex".bold(),
-+        "Zenithal".bold(),
++        "Stoic Codex".bold(),
          format!(" (v{version})").dim(),
      ]
  }
@@ -266,7 +266,7 @@ index 237ef9e..7a61054 100644
      fn raw_lines(&self) -> Vec<Line<'static>> {
          let mut lines = vec![
 -            Line::from(format!("OpenAI Codex (v{})", self.version)),
-+            Line::from(format!("Zenithal (v{})", self.version)),
++            Line::from(format!("Stoic Codex (v{})", self.version)),
              Line::from(format!(
                  "model: {}{}",
                  self.model,
@@ -279,7 +279,7 @@ index 47ed0fd..7c6fdc0 100644
  
      let heading_text = Span::from(format!(
 -        "Codex just got an upgrade. Introducing {target_display_name}."
-+        "Zenithal just got an upgrade. Introducing {target_display_name}."
++        "Stoic Codex just got an upgrade. Introducing {target_display_name}."
      ))
      .bold();
      let description_line: Line<'static>;
@@ -292,7 +292,7 @@ index 9c9e7b8..672403c 100644
              "  ".into(),
              "Welcome to ".into(),
 -            "Codex".bold(),
-+            "Zenithal".bold(),
++            "Stoic Codex".bold(),
              ", OpenAI's command-line coding agent".into(),
          ]));
  
@@ -305,7 +305,7 @@ index dfd0538..70f62d9 100644
      pub fn description(self) -> &'static str {
          match self {
 -            SlashCommand::Config => "configure Codex preferences",
-+            SlashCommand::Config => "configure Zenithal preferences",
++            SlashCommand::Config => "configure Stoic Codex preferences",
              SlashCommand::Feedback => "send logs to maintainers",
              SlashCommand::New => "start a new chat during a conversation",
              SlashCommand::Init => "create an AGENTS.md file with instructions for Codex",
@@ -314,7 +314,7 @@ index dfd0538..70f62d9 100644
              SlashCommand::Worktree => "start or continue a conversation in a new worktree",
              SlashCommand::App => "continue this session in the Desktop app",
 -            SlashCommand::Quit | SlashCommand::Exit => "exit Codex",
-+            SlashCommand::Quit | SlashCommand::Exit => "exit Zenithal",
++            SlashCommand::Quit | SlashCommand::Exit => "exit Stoic Codex",
              SlashCommand::Copy => "copy the last response or part of it",
              SlashCommand::Export => "export the conversation as markdown",
              SlashCommand::Raw => "toggle raw scrollback mode for copy-friendly terminal selection",
@@ -323,7 +323,7 @@ index dfd0538..70f62d9 100644
                  "start a side conversation in an ephemeral fork"
              }
 -            SlashCommand::Permissions => "choose what Codex is allowed to do",
-+            SlashCommand::Permissions => "choose what Zenithal is allowed to do",
++            SlashCommand::Permissions => "choose what Stoic Codex is allowed to do",
              SlashCommand::Keymap => "remap TUI shortcuts",
              SlashCommand::Vim => "toggle Vim mode for the composer",
              SlashCommand::ElevateSandbox => "set up elevated agent sandbox",
@@ -332,7 +332,7 @@ index dfd0538..70f62d9 100644
              SlashCommand::Apps => "manage apps",
              SlashCommand::Plugins => "browse plugins",
 -            SlashCommand::Logout => "log out of Codex",
-+            SlashCommand::Logout => "log out of Zenithal",
++            SlashCommand::Logout => "log out of Stoic Codex",
              SlashCommand::Rollout => "print the rollout file path",
              SlashCommand::TestApproval => "test approval request",
          }
@@ -349,18 +349,18 @@ index 4319a09..b39d5c1 100644
 +// own repository; set to None to disable the announcement feature entirely.
  const ANNOUNCEMENT_TIP_URL: &str =
 -    "https://raw.githubusercontent.com/openai/codex/main/announcement_tip.toml";
-+    "https://raw.githubusercontent.com/Hubris-tic/zenithal/main/announcement_tip.toml";
++    "https://raw.githubusercontent.com/Hubris-tic/stoic-codex/main/announcement_tip.toml";
  
  const IS_MACOS: bool = cfg!(target_os = "macos");
  const IS_WINDOWS: bool = cfg!(target_os = "windows");
  
 -const WINDOWS_APP_TOOLTIP: &str = "Use the **desktop app**. Install it from https://chatgpt.com/codex?app-landing-page=true and run `codex app`.";
-+const WINDOWS_APP_TOOLTIP: &str = "Tip: start a session with `zenithal` in any project directory.";
++const WINDOWS_APP_TOOLTIP: &str = "Tip: start a session with `stoic-codex` in any project directory.";
  const MACOS_APP_TOOLTIP: &str =
 -    "Use the **desktop app**. Run `codex app` to open it. It installs automatically if needed.";
 -const LINUX_APP_TOOLTIP: &str = "Use the **desktop app**. Install it from https://learn.chatgpt.com/docs/linux/linux-app and run `chatgpt`.";
-+    "Tip: run `zenithal` inside a git repo to get worktree-aware help.";
-+const LINUX_APP_TOOLTIP: &str = "Tip: `zenithal --help` lists every command and flag.";
++    "Tip: run `stoic-codex` inside a git repo to get worktree-aware help.";
++const LINUX_APP_TOOLTIP: &str = "Tip: `stoic-codex --help` lists every command and flag.";
  
  const RAW_TOOLTIPS: &str = include_str!("../assets/tooltips.txt");
  
@@ -386,7 +386,7 @@ index 860d0bd..161785a 100644
 +        // NIZARI: self-update is disabled. Every upstream action here installs
 +        // *OpenAI's* CLI into this installation - `npm install -g @openai/codex`,
 +        // `brew upgrade --cask codex`, or `curl .../codex/install.sh | sh`. Running any
-+        // of them would silently replace Zenithal with upstream. Re-enable only once
++        // of them would silently replace Stoic Codex with upstream. Re-enable only once
 +        // our own release channel exists, and point it at our artefacts.
 +        let _ = context;
 +        if true {
@@ -404,17 +404,17 @@ index 860d0bd..161785a 100644
 -            UpdateAction::VitePlusGlobalLatest => ("vp", &["install", "-g", "@openai/codex"]),
 -            UpdateAction::PnpmGlobalLatest => ("pnpm", &["add", "-g", "@openai/codex"]),
 -            UpdateAction::BrewUpgrade => ("brew", &["upgrade", "--cask", "codex"]),
-+            UpdateAction::NpmGlobalLatest => ("echo", &["self-update is disabled in Zenithal"]),
-+            UpdateAction::BunGlobalLatest => ("echo", &["self-update is disabled in Zenithal"]),
-+            UpdateAction::VitePlusGlobalLatest => ("echo", &["self-update is disabled in Zenithal"]),
-+            UpdateAction::PnpmGlobalLatest => ("echo", &["self-update is disabled in Zenithal"]),
-+            UpdateAction::BrewUpgrade => ("echo", &["self-update is disabled in Zenithal"]),
++            UpdateAction::NpmGlobalLatest => ("echo", &["self-update is disabled in Stoic Codex"]),
++            UpdateAction::BunGlobalLatest => ("echo", &["self-update is disabled in Stoic Codex"]),
++            UpdateAction::VitePlusGlobalLatest => ("echo", &["self-update is disabled in Stoic Codex"]),
++            UpdateAction::PnpmGlobalLatest => ("echo", &["self-update is disabled in Stoic Codex"]),
++            UpdateAction::BrewUpgrade => ("echo", &["self-update is disabled in Stoic Codex"]),
              UpdateAction::StandaloneUnix => (
                  "sh",
                  &[
                      "-c",
 -                    "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh",
-+                    "(self-update disabled in Zenithal; see https://github.com/Hubris-tic/zenithal/releases)",
++                    "(self-update disabled in Stoic Codex; see https://github.com/Hubris-tic/stoic-codex/releases)",
                  ],
              ),
              UpdateAction::StandaloneWindows => (
@@ -423,7 +423,7 @@ index 860d0bd..161785a 100644
                      "Bypass",
                      "-c",
 -                    "$env:CODEX_NON_INTERACTIVE=1; irm https://chatgpt.com/codex/install.ps1 | iex",
-+                    "(self-update disabled in Zenithal; see https://github.com/Hubris-tic/zenithal/releases)",
++                    "(self-update disabled in Stoic Codex; see https://github.com/Hubris-tic/stoic-codex/releases)",
                  ],
              ),
          }
@@ -436,7 +436,7 @@ index 30e948d..057528d 100644
  use tokio_stream::StreamExt;
  
 -const RELEASE_NOTES_URL: &str = "https://github.com/openai/codex/releases/latest";
-+const RELEASE_NOTES_URL: &str = "https://github.com/Hubris-tic/zenithal/releases/latest";
++const RELEASE_NOTES_URL: &str = "https://github.com/Hubris-tic/stoic-codex/releases/latest";
  
  #[cfg(not(debug_assertions))]
  pub(crate) enum UpdatePromptOutcome {
@@ -448,11 +448,11 @@ index 9bbdf31..64f1398 100644
  }
  
  // We use the latest version from the cask if installation is via homebrew - homebrew does not immediately pick up the latest release and can lag behind.
-+// zenithal:allow-upstream-url -- INERT: no Homebrew cask exists for this fork.
++// stoic-codex:allow-upstream-url -- INERT: no Homebrew cask exists for this fork.
  const HOMEBREW_CASK_API_URL: &str = "https://formulae.brew.sh/api/cask/codex.json";
 -const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/openai/codex/releases/latest";
 +// NIZARI: was upstream's repo - we must not advertise OpenAI's releases as ours.
-+const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/Hubris-tic/zenithal/releases/latest";
++const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/Hubris-tic/stoic-codex/releases/latest";
  
  #[derive(Deserialize, Debug, Clone)]
  struct ReleaseInfo {
@@ -471,7 +471,7 @@ index 0000000..418ff2e
 +//!   * **soft** patterns are reported but do not fail. They are ChatGPT-account
 +//!     features (billing banners, help articles) that a BYOK user never reaches, or
 +//!     deliberate security policy (the exec-server host allowlist). Tracked in
-+//!     `zenithal/rebrand/strings.md` as debt; promoting one to `hard` is the fix.
++//!     `stoic-codex/rebrand/strings.md` as debt; promoting one to `hard` is the fix.
 +//!
 +//! Shipped code only: `*_tests.rs`, `tests/` dirs and everything from the first
 +//! `#[cfg(test)]` onwards is skipped, because tests legitimately use upstream URLs as
@@ -575,7 +575,7 @@ index 0000000..418ff2e
 +                .map(|(_, l)| l.as_str())
 +                .collect::<Vec<_>>()
 +                .join("\n");
-+            if line.contains("zenithal:allow-upstream-url") || window.contains("zenithal:allow-upstream-url") {
++            if line.contains("stoic-codex:allow-upstream-url") || window.contains("stoic-codex:allow-upstream-url") {
 +                continue;
 +            }
 +            for pattern in patterns {
@@ -599,7 +599,7 @@ index 0000000..418ff2e
 +    let hits = scan(&hard_patterns());
 +    assert!(
 +        hits.is_empty(),
-+        "Zenithal must not install, update, or advertise OpenAI's software.\n\
++        "Stoic Codex must not install, update, or advertise OpenAI's software.\n\
 +         {} occurrence(s):\n\n{}\n\n\
 +         These are supply-chain risks: `update` running `npm i -g @openai/codex` or\n\
 +         `curl chatgpt.com/codex/install.sh | sh` replaces this fork with upstream.\n\
@@ -619,7 +619,7 @@ index 0000000..418ff2e
 +    }
 +    println!(
 +        "NIZARI audit: {} openai/chatgpt references remain in shipped code \
-+         (ChatGPT-account features and security policy). See zenithal/rebrand/strings.md.",
++         (ChatGPT-account features and security policy). See stoic-codex/rebrand/strings.md.",
 +        hits.len()
 +    );
 +    for h in hits.iter().take(40) {

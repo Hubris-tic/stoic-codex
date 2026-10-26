@@ -29,7 +29,7 @@ impl MemoryStore {
         MemoryStore { backend }
     }
 
-    /// No configuration, no server, no files. This is what `zenithal` uses before the user
+    /// No configuration, no server, no files. This is what `stoic-codex` uses before the user
     /// opts into anything — the "just works" path that keeps startup instant.
     pub fn local() -> Self {
         MemoryStore::new(Box::new(InMemoryBackend::new()))
@@ -212,7 +212,7 @@ impl MemoryStore {
     }
 
     /// One line per hit showing which signals fired. The TUI's memory panel and
-    /// `zenithal memory why` both render this.
+    /// `stoic-codex memory why` both render this.
     pub fn explain(&self, hits: &[Hit]) -> Vec<String> {
         hits.iter()
             .map(|h| {
@@ -258,7 +258,7 @@ mod tests {
     fn default_options_prefer_the_daemon_then_a_file_under_the_config_dir() {
         let o = OpenOptions::default();
         assert_eq!(o.backend, "auto");
-        assert!(o.file.ends_with(".zenithal/memory.json"), "{:?}", o.file);
+        assert!(o.file.ends_with(".stoic-codex/memory.json"), "{:?}", o.file);
         assert_eq!(o.daemon.address, "127.0.0.1:1729");
     }
 
@@ -540,13 +540,13 @@ pub struct OpenOptions {
 }
 
 impl Default for OpenOptions {
-    /// `auto`, loopback daemon defaults, and `~/.zenithal/memory.json`. The CLI overrides
+    /// `auto`, loopback daemon defaults, and `~/.stoic-codex/memory.json`. The CLI overrides
     /// the path with its own injected home; a library caller gets a working default.
     fn default() -> Self {
         let file = std::env::var_os("HOME")
             .map(|home| {
                 std::path::PathBuf::from(home)
-                    .join(".zenithal")
+                    .join(".stoic-codex")
                     .join("memory.json")
             })
             .unwrap_or_else(|| std::path::PathBuf::from("memory.json"));
@@ -595,7 +595,7 @@ fn open_typedb(options: &OpenOptions) -> Result<OpenedMemory> {
             // reports rather than quietly using a different store.
             return Err(MemoryError::Unsupported {
                 feature: format!(
-                    "a local TypeDB daemon at {} (set ZENITHAL_TYPEDB_BIN, install TypeDB, \
+                    "a local TypeDB daemon at {} (set STOIC_CODEX_TYPEDB_BIN, install TypeDB, \
                      or use backend `file`)",
                     options.daemon.address
                 ),
