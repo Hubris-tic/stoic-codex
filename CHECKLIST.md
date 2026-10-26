@@ -207,14 +207,17 @@ The selected public destination is `Hubris-tic/stoic-codex`; push only to the ex
 `agent/zenithal-workspace-sync-2026-10-26`. Do not push to `main`. Preserve upstream identifiers
 and include the pre-existing transcript/context-budget work in the same workspace sync.
 
-- [ ] Review the source rebrand, `.zenithal` config migration, and `ZENITHAL_*` compatibility
-      aliases; the code is written but **not compiled or tested** in this environment.
-- [ ] Transfer the verified-in-working-tree changes into `/var/tmp/zenithal-push`, scan the full
-      diff and secrets, then commit and push to the selected feature branch only.
-- [ ] Rename the GitHub repository to `Hubris-tic/stoic-codex`, update the local push remote, and
-      verify the branch points to the new commit. No `main` push.
-- [ ] Revoke both pasted GitHub PATs at the end, keep only the keeper PAT's rotated successor, and
-      rotate the Gemini key; never print or commit any credential value.
+- [x] Static review of the source rebrand, `.zenithal` config migration, and `ZENITHAL_*`
+      compatibility aliases; historical TypeDB database ID preserved.
+- [ ] Compile and test the Rust changes. **Not verified**: this environment has no `cargo` or
+      `rustc`; no Rust test result is claimed for the rename/session changes.
+- [x] Transferred the workspace to `/var/tmp/zenithal-push`, scanned the staged diff and secrets,
+      and committed/pushed to the selected feature branch only: `5a7bb0d17e31c17f8b6636675876cc990c10af26`.
+      No `main` push.
+- [x] Renamed the GitHub repository to `Hubris-tic/stoic-codex`, updated the local push remote,
+      and verified that the selected branch points to that commit; `main` remains untouched.
+- [ ] Revoke both pasted GitHub PATs, keep only the keeper PAT's rotated successor, and rotate the
+      Gemini key. Credential values must never be printed or committed; see §0.
 
 ## A. Verified in the preceding validation round — with the evidence, so it does not get re-litigated
 
