@@ -1,7 +1,7 @@
 # stoic-codex-providers
 
 Provider-agnostic wire layer: **one canonical IR, many vendor adapters.**
-Pure translation — no async, no HTTP, no secrets. 112 tests, 0 warnings, no network required
+Pure translation — no async, no HTTP, no secrets. 113 tests, 0 warnings, no network required
 for the default suite. Two Gemini tests are live (`--ignored`), because the real API taught us
 things no cassette could: see [`LIVE.md`](LIVE.md). No paid Anthropic/OpenAI key is needed.
 
@@ -118,7 +118,7 @@ Both are pinned by offline tests built from captured payloads, plus two `#[ignor
 ## Tests
 
 ```bash
-cargo test    # 112 tests: adapters, model catalogues, cassettes, SSE, routing, cost
+cargo test    # 113 tests: adapters, model catalogues, cassettes, SSE, routing, cost
 ```
 
 - `tests/cassette_conformance.rs` — all four wire formats feed one identical

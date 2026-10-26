@@ -7,12 +7,13 @@
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use serde_json::json;
 use stoic_codex_agent::{
-    provisional_name, run_mission, MissionConfig, MissionEvent, Model, Operator, OperatorState,
-    Repo, Verdict,
+    provisional_name, run_mission, MissionConfig, MissionEvent, MissionOutcome, Model, Operator,
+    OperatorState, Repo, Verdict,
 };
 use stoic_codex_providers::{CanonicalRequest, CanonicalResponse, Content, StopReason, Usage};
 
@@ -218,6 +219,100 @@ fn broken() -> Box<dyn Model> {
     Box::new(Broken)
 }
 
+struct WriteThenBroken {
+    path: String,
+    content: String,
+    calls: AtomicUsize,
+}
+
+impl Model for WriteThenBroken {
+    fn complete(
+        &self,
+        _: &CanonicalRequest,
+    ) -> Result<CanonicalResponse, stoic_codex_agent::ModelError> {
+        if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Ok(CanonicalResponse {
+                model: "worker-model".into(),
+                content: vec![Content::tool_use(
+                    "write-before-failure",
+                    "write_file",
+                    json!({ "path": self.path, "content": self.content }),
+                )],
+                stop_reason: StopReason::ToolUse,
+                usage: Usage::default(),
+            });
+        }
+        Err(stoic_codex_agent::ModelError::Refused {
+            status: 500,
+            detail: "provider failed after the file write".into(),
+        })
+    }
+}
+
+fn write_then_broken(path: &str, content: &str) -> Box<dyn Model> {
+    Box::new(WriteThenBroken {
+        path: path.into(),
+        content: content.into(),
+        calls: AtomicUsize::new(0),
+    })
+}
+
+struct SlowWorker {
+    path: String,
+    calls: AtomicUsize,
+    active: Arc<AtomicUsize>,
+    peak: Arc<AtomicUsize>,
+    delay: Duration,
+}
+
+impl Model for SlowWorker {
+    fn complete(
+        &self,
+        _: &CanonicalRequest,
+    ) -> Result<CanonicalResponse, stoic_codex_agent::ModelError> {
+        let call = self.calls.fetch_add(1, Ordering::SeqCst);
+        let active = self.active.fetch_add(1, Ordering::SeqCst) + 1;
+        self.peak.fetch_max(active, Ordering::SeqCst);
+        std::thread::sleep(self.delay);
+        self.active.fetch_sub(1, Ordering::SeqCst);
+
+        if call == 0 {
+            Ok(CanonicalResponse {
+                model: "worker-model".into(),
+                content: vec![Content::tool_use(
+                    "slow-write",
+                    "write_file",
+                    json!({ "path": self.path, "content": "parallel\n" }),
+                )],
+                stop_reason: StopReason::ToolUse,
+                usage: Usage::default(),
+            })
+        } else {
+            Ok(CanonicalResponse {
+                model: "worker-model".into(),
+                content: vec![Content::text("done")],
+                stop_reason: StopReason::EndTurn,
+                usage: Usage::default(),
+            })
+        }
+    }
+}
+
+fn slow_worker(
+    path: &str,
+    active: Arc<AtomicUsize>,
+    peak: Arc<AtomicUsize>,
+    delay: Duration,
+) -> Box<dyn Model> {
+    Box::new(SlowWorker {
+        path: path.into(),
+        calls: AtomicUsize::new(0),
+        active,
+        peak,
+        delay,
+    })
+}
+
 fn three(workers: Vec<Box<dyn Model>>) -> Vec<Operator> {
     workers
         .into_iter()
@@ -331,6 +426,7 @@ fn strategos_divides_the_work_and_every_operators_lands_its_own_files() {
     );
     assert_eq!(t.read("docs/parser.md").as_deref(), Some("# parser\n"));
     assert_eq!(report.applied_count(), 3);
+    assert_eq!(report.outcome(), MissionOutcome::Complete);
     assert!(report.commit.is_some());
     assert!(
         t.log_subject().contains("stoic-codex mission"),
@@ -350,6 +446,91 @@ fn strategos_divides_the_work_and_every_operators_lands_its_own_files() {
         !t.dir.join(".git/stoic-codex-missions").exists(),
         "worktrees left behind"
     );
+}
+
+#[test]
+fn parallel_execution_is_closer_to_the_slowest_operator_than_their_sum() {
+    let t = TestRepo::new("parallel");
+    let boss = Boss::plan_and_review(
+        &plan(&[
+            ("slot-1", "write alpha"),
+            ("slot-2", "write beta"),
+            ("slot-3", "write gamma"),
+        ]),
+        &review(&[
+            ("x1-write", true, "ok"),
+            ("x2-check", true, "ok"),
+            ("x3-ship", true, "ok"),
+        ]),
+    );
+    let active = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let delay = Duration::from_millis(60);
+    let operators = three(vec![
+        slow_worker("alpha.txt", active.clone(), peak.clone(), delay),
+        slow_worker("beta.txt", active.clone(), peak.clone(), delay),
+        slow_worker("gamma.txt", active.clone(), peak.clone(), delay),
+    ]);
+    let cfg = MissionConfig {
+        max_parallel: 3,
+        ..config()
+    };
+
+    let report = run_mission(
+        &t.repo(),
+        boss.as_ref(),
+        operators,
+        "write three files",
+        &cfg,
+        &|_| {},
+    )
+    .expect("mission should run");
+
+    let slowest_ms = delay.as_millis() as u64 * 2; // each Operator makes two model calls
+    let serial_ms = slowest_ms * 3;
+    assert_eq!(peak.load(Ordering::SeqCst), 3, "operators did not overlap");
+    assert!(
+        report.parallel_ms < slowest_ms * 2,
+        "{} ms is not closer to max({slowest_ms} ms) than sum({serial_ms} ms)",
+        report.parallel_ms
+    );
+    assert_eq!(report.outcome(), MissionOutcome::Complete);
+}
+
+#[test]
+fn keeping_worktrees_keeps_their_branches_attached_even_without_keep_branches() {
+    let t = TestRepo::new("keep-worktrees");
+    let boss = Boss::plan_and_review(
+        &plan(&[("slot-1", "write a file")]),
+        &review(&[("x1-write", true, "good")]),
+    );
+    let operators = three(vec![worker(&[("kept.txt", "kept\n")])]);
+    let cfg = MissionConfig {
+        keep_worktrees: true,
+        ..config()
+    };
+
+    let report = run_mission(
+        &t.repo(),
+        boss.as_ref(),
+        operators,
+        "write a file",
+        &cfg,
+        &|_| {},
+    )
+    .expect("mission should run");
+
+    let worktree = t.dir.join(".git/stoic-codex-missions/x1-write");
+    assert!(worktree.exists());
+    assert_eq!(
+        std::fs::read_to_string(worktree.join("kept.txt")).unwrap(),
+        "kept\n"
+    );
+    assert!(t
+        .git(&["worktree", "list", "--porcelain"])
+        .contains("branch refs/heads/stoic-codex/x1-write"));
+    assert_eq!(report.outcome(), MissionOutcome::Complete);
+    assert!(report.cleanup_warnings.is_empty());
 }
 
 #[test]
@@ -392,6 +573,7 @@ fn a_rejected_operators_changes_nothing_and_keeps_its_branch() {
         "the rejection was not honoured"
     );
     assert_eq!(report.applied_count(), 1);
+    assert_eq!(report.outcome(), MissionOutcome::PartialSuccess);
     // The rejected work is not deleted: its branch holds the only copy, named after the code.
     assert!(
         t.branches().iter().any(|b| b.contains("x2-check")),
@@ -432,6 +614,55 @@ fn two_operators_on_the_same_file_is_a_reported_conflict_not_a_silent_overwrite(
         report.applied_count(),
         1,
         "only one Operator may own a file"
+    );
+    assert_eq!(report.outcome(), MissionOutcome::PartialSuccess);
+}
+
+#[test]
+fn a_partially_applied_operators_branch_keeps_its_unapplied_conflict() {
+    let t = TestRepo::new("partial-conflict");
+    let boss = Boss::plan_and_review(
+        &plan(&[
+            ("slot-1", "write the shared file"),
+            ("slot-2", "write shared and own files"),
+        ]),
+        &review(&[
+            ("x1-write", true, "first writer"),
+            ("x2-check", true, "keep both edits"),
+        ]),
+    );
+    let operators = three(vec![
+        worker(&[("shared.txt", "first\n")]),
+        worker(&[("shared.txt", "second\n"), ("unique.txt", "also second\n")]),
+    ]);
+
+    let report = run_mission(
+        &t.repo(),
+        boss.as_ref(),
+        operators,
+        "write overlapping files",
+        &config(),
+        &|_| {},
+    )
+    .expect("mission should run");
+
+    assert_eq!(report.outcome(), MissionOutcome::PartialSuccess);
+    assert_eq!(t.read("shared.txt").as_deref(), Some("first\n"));
+    assert_eq!(t.read("unique.txt").as_deref(), Some("also second\n"));
+    assert_eq!(
+        t.git(&["show", "stoic-codex/x2-check:shared.txt"]).trim(),
+        "second"
+    );
+    assert!(
+        t.branches()
+            .iter()
+            .any(|branch| branch == "stoic-codex/x2-check"),
+        "the partially applied branch must survive for recovery: {:?}",
+        t.branches()
+    );
+    assert!(
+        !t.dir.join(".git/stoic-codex-missions").exists(),
+        "clean worktrees should still be removed"
     );
 }
 
@@ -491,6 +722,8 @@ fn a_failed_review_keeps_the_work_instead_of_throwing_it_away() {
         "{}",
         report.review_note
     );
+    assert!(report.review_failed);
+    assert_eq!(report.outcome(), MissionOutcome::PartialSuccess);
     assert_eq!(report.operators[0].verdict, Verdict::Accepted);
     assert!(report.operators[0].reason.contains("review step failed"));
     assert_eq!(t.read("out.txt").as_deref(), Some("kept\n"));
@@ -523,6 +756,8 @@ fn review_can_be_switched_off_and_then_every_clean_result_lands() {
     )
     .expect("mission should run");
     assert_eq!(report.applied_count(), 2);
+    assert_eq!(report.outcome(), MissionOutcome::Complete);
+    assert!(!report.review_failed);
     assert!(report.review_note.contains("review disabled"));
 }
 
@@ -557,6 +792,115 @@ fn a_broken_operators_does_not_stop_the_others() {
         .unwrap_or("")
         .contains("provider fell over"));
     assert_eq!(t.read("ok.txt").as_deref(), Some("fine\n"));
+    assert_eq!(report.outcome(), MissionOutcome::PartialSuccess);
+}
+
+#[test]
+fn changes_written_before_a_provider_failure_are_saved_on_the_recovery_branch() {
+    let t = TestRepo::new("failure-after-write");
+    let boss = Boss::plan_and_review(
+        &plan(&[
+            ("slot-1", "write, then fail"),
+            ("slot-2", "write successfully"),
+        ]),
+        &review(&[("x1-write", true, "partial"), ("x2-check", true, "good")]),
+    );
+    let operators = three(vec![
+        write_then_broken("partial.txt", "preserve this\n"),
+        worker(&[("ok.txt", "fine\n")]),
+    ]);
+
+    let report = run_mission(
+        &t.repo(),
+        boss.as_ref(),
+        operators,
+        "split work",
+        &config(),
+        &|_| {},
+    )
+    .expect("the other Operator's work should still land");
+
+    let failed = report
+        .operators
+        .iter()
+        .find(|result| result.codename == "x1-write")
+        .unwrap();
+    assert_eq!(failed.state, OperatorState::Failed);
+    assert_eq!(failed.verdict, Verdict::Rejected);
+    assert_eq!(
+        failed
+            .files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["partial.txt"]
+    );
+    assert!(
+        failed.commit.is_some(),
+        "the partial tree must be committed for recovery"
+    );
+    assert_eq!(t.read("ok.txt").as_deref(), Some("fine\n"));
+    assert!(
+        t.read("partial.txt").is_none(),
+        "failed work must not auto-apply"
+    );
+    assert_eq!(
+        t.git(&["show", "stoic-codex/x1-write:partial.txt"]).trim(),
+        "preserve this"
+    );
+    assert_eq!(report.outcome(), MissionOutcome::PartialSuccess);
+    assert!(
+        !t.dir.join(".git/stoic-codex-missions").exists(),
+        "the committed recovery branch should allow worktree cleanup"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_uncommittable_result_keeps_its_dirty_worktree_for_recovery() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let t = TestRepo::new("commit-failure");
+    let hooks = t.dir.join(".git/test-hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    let hook = hooks.join("pre-commit");
+    std::fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+    let mut permissions = std::fs::metadata(&hook).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&hook, permissions).unwrap();
+    t.git(&["config", "core.hooksPath", hooks.to_str().unwrap()]);
+
+    let boss = Boss::plan_and_review(
+        &plan(&[("slot-1", "write a recoverable file")]),
+        &review(&[("x1-write", true, "the file is useful")]),
+    );
+    let operators = three(vec![worker(&[("recover.txt", "recover me\n")])]);
+    let report = run_mission(
+        &t.repo(),
+        boss.as_ref(),
+        operators,
+        "write a recoverable file",
+        &config(),
+        &|_| {},
+    )
+    .expect("the mission should return a report");
+
+    let worktree = t.dir.join(".git/stoic-codex-missions/x1-write");
+    assert_eq!(report.applied_count(), 0);
+    assert_eq!(report.outcome(), MissionOutcome::Failed);
+    assert!(report
+        .cleanup_warnings
+        .iter()
+        .any(|warning| { warning.contains("kept x1-write's worktree") }));
+    assert_eq!(
+        std::fs::read_to_string(worktree.join("recover.txt")).unwrap(),
+        "recover me\n"
+    );
+    let worktree_list = t.git(&["worktree", "list", "--porcelain"]);
+    assert!(
+        worktree_list.contains("branch refs/heads/stoic-codex/x1-write"),
+        "the recovery branch must remain attached to the kept worktree: {worktree_list}"
+    );
 }
 
 #[test]

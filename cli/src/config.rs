@@ -42,6 +42,9 @@ pub struct MemorySettings {
     /// Character budget for the memory block injected into a prompt.
     #[serde(default = "default_budget")]
     pub context_budget: usize,
+    /// Token budget for that block, enforced with the calibrated local estimator.
+    #[serde(default = "default_token_budget")]
+    pub context_token_budget: usize,
     /// Set false to guarantee that nothing is ever started.
     #[serde(default = "default_true")]
     pub allow_daemon: bool,
@@ -60,6 +63,9 @@ fn default_database() -> String {
 fn default_budget() -> usize {
     1200
 }
+fn default_token_budget() -> usize {
+    400
+}
 fn default_true() -> bool {
     true
 }
@@ -71,6 +77,7 @@ impl Default for MemorySettings {
             daemon_address: default_address(),
             database: default_database(),
             context_budget: default_budget(),
+            context_token_budget: default_token_budget(),
             allow_daemon: true,
         }
     }
@@ -179,6 +186,9 @@ impl Config {
         if self.memory.context_budget < 100 {
             return Err("memory.context_budget must be at least 100 characters".into());
         }
+        if self.memory.context_token_budget == 0 {
+            return Err("memory.context_token_budget must be at least 1 token".into());
+        }
         if let Some(attempts) = self.providers.max_attempts {
             if !(1..=10).contains(&attempts) {
                 return Err("providers.max_attempts must be between 1 and 10".into());
@@ -208,14 +218,20 @@ mod tests {
         assert_eq!(cfg.memory.database, "zenithal_memory");
         assert!(cfg.memory.allow_daemon);
         assert_eq!(cfg.memory.context_budget, 1200);
+        assert_eq!(cfg.memory.context_token_budget, 400);
     }
 
     #[test]
     fn a_partial_file_keeps_defaults_for_the_rest() {
         let path = temp("partial");
-        std::fs::write(&path, r#"{"memory":{"context_budget":400}}"#).unwrap();
+        std::fs::write(
+            &path,
+            r#"{"memory":{"context_budget":400,"context_token_budget":128}}"#,
+        )
+        .unwrap();
         let cfg = Config::load(&path).unwrap();
         assert_eq!(cfg.memory.context_budget, 400);
+        assert_eq!(cfg.memory.context_token_budget, 128);
         assert_eq!(cfg.memory.daemon_address, "127.0.0.1:1729");
     }
 
@@ -246,6 +262,7 @@ mod tests {
         let mut cfg = Config::default();
         cfg.memory.daemon_address = "127.0.0.1:1800".into();
         cfg.memory.context_budget = 900;
+        cfg.memory.context_token_budget = 300;
         cfg.save(&path).unwrap();
         let back = Config::load(&path).unwrap();
         assert_eq!(back, cfg);
@@ -273,5 +290,13 @@ mod tests {
         let mut cfg = Config::default();
         cfg.memory.context_budget = 20;
         assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn a_zero_memory_token_budget_is_rejected() {
+        let mut cfg = Config::default();
+        cfg.memory.context_token_budget = 0;
+        let error = cfg.validate().unwrap_err();
+        assert!(error.contains("context_token_budget"), "{error}");
     }
 }

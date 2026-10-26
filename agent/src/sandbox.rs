@@ -97,19 +97,35 @@ impl Sandbox {
     pub fn resolve(&self, raw: &str) -> Result<PathBuf, SandboxError> {
         self.check_lexically(raw)?;
         let joined = self.root.join(raw.trim_start_matches("./"));
-        if joined.exists() {
-            return self.confine(joined, raw);
-        }
-        // Check the deepest existing ancestor, so a symlinked directory cannot be used as
-        // a foothold for a path that does not exist yet.
+
+        // `Path::exists()` follows symlinks and returns false for a dangling link. That is
+        // unsafe for writes: `write_file` can create the link's external target. Walk with
+        // `symlink_metadata` instead, so the link itself is checked even when its target is
+        // missing.
         let mut ancestor = joined.clone();
-        while !ancestor.exists() {
-            match ancestor.parent() {
-                Some(p) => ancestor = p.to_path_buf(),
-                None => break,
+        loop {
+            match std::fs::symlink_metadata(&ancestor) {
+                Ok(_) => break,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    ancestor = ancestor
+                        .parent()
+                        .ok_or_else(|| SandboxError::NotFound {
+                            path: raw.to_string(),
+                        })?
+                        .to_path_buf();
+                }
+                Err(e) => {
+                    return Err(SandboxError::Io {
+                        path: raw.to_string(),
+                        detail: e.to_string(),
+                    });
+                }
             }
         }
-        self.confine(ancestor, raw)?;
+        let confined = self.confine(ancestor.clone(), raw)?;
+        if ancestor == joined {
+            return Ok(confined);
+        }
         Ok(joined)
     }
 
@@ -168,7 +184,10 @@ impl Sandbox {
     }
 
     fn confine(&self, candidate: PathBuf, raw: &str) -> Result<PathBuf, SandboxError> {
-        let canonical = candidate.canonicalize().unwrap_or(candidate);
+        let canonical = candidate.canonicalize().map_err(|e| SandboxError::Io {
+            path: raw.to_string(),
+            detail: format!("cannot resolve path safely: {e}"),
+        })?;
         if !canonical.starts_with(&self.root) {
             return Err(SandboxError::Escapes {
                 path: raw.to_string(),
@@ -252,7 +271,11 @@ mod tests {
     #[test]
     fn a_symlink_out_of_the_root_is_refused() {
         let (sandbox, dir) = sandbox();
-        let outside = dir.path().parent().unwrap().join("stoic-codex-outside-target");
+        let outside = dir
+            .path()
+            .parent()
+            .unwrap()
+            .join("stoic-codex-outside-target");
         std::fs::write(&outside, "secret").unwrap();
         #[cfg(unix)]
         {
@@ -263,6 +286,29 @@ mod tests {
             ));
         }
         let _ = std::fs::remove_file(&outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_symlink_to_an_external_file_cannot_escape_on_write() {
+        let (sandbox, dir) = sandbox();
+        let target = dir.path().with_extension("outside");
+        std::os::unix::fs::symlink(&target, dir.path().join("dangling-link")).unwrap();
+
+        let resolution = sandbox.resolve("dangling-link");
+        if let Ok(path) = &resolution {
+            // Reproduce the filesystem operations the write tool performs after resolution.
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "must stay inside").unwrap();
+        }
+
+        let escaped = target.exists();
+        let _ = std::fs::remove_file(&target);
+        assert!(resolution.is_err(), "dangling external symlink was allowed");
+        assert!(
+            !escaped,
+            "write escaped the sandbox through a dangling symlink"
+        );
     }
 
     #[test]

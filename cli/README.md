@@ -44,6 +44,7 @@ misspelled key is a hard error, not a silent no-op.
     "daemon_address": "127.0.0.1:1729",
     "database": "zenithal_memory",
     "context_budget": 1200,
+    "context_token_budget": 400,
     "allow_daemon": true
   },
   "providers": {
@@ -210,9 +211,16 @@ One boss — **Strategos**, no tools — plans the split, names each operator, t
 comes back. Each operator gets a short-hand system code (`x1-write`, `x2-check`, …), its own
 git worktree, branch (`stoic-codex/<code>`), sandbox and model client. Accepted files are copied
 into the working tree whole, first accepted writer wins, and the mission makes one commit.
-Overlapping edits are reported as conflicts, never merged; a rejected operator keeps its work
-on its branch. Exit code is `1` when nothing applicable landed, even if every model answered
-politely.
+Overlapping edits are reported as conflicts, never merged. Rejected or partly applied work stays
+on its branch; changes written before a provider failure are committed there for recovery when
+possible. If that recovery commit fails, the dirty worktree is kept and a warning is reported.
+
+The exit policy is **useful-work first**: exit `1` only when no applicable file lands; if any
+accepted file lands, exit `0` even when some operators fail, are rejected, or lose conflicts. The
+terminal summary says `outcome partial success`; `--json` reports `outcome: "partial_success"`
+(or `complete` / `failed`) so scripts can distinguish partial delivery without discarding useful
+work. `--keep-worktrees` also keeps their branches attached; `--keep-branches` keeps branches after
+the worktrees are removed.
 
 The progress log on stderr is a fixed-column table — `[code]`, a verb, then `key=value` — so a
 mission can be watched while three operators type at once:
@@ -280,16 +288,18 @@ a memory was reached through the graph rather than by text.
 
 ```bash
 stoic-codex context "token expiry"                 # the prompt block, system + user
-stoic-codex context "token expiry" --budget 600
+stoic-codex context "token expiry" --budget 600 --max-tokens 200
 stoic-codex context "token expiry" --system-only   # drop-in system prompt
 stoic-codex context "token expiry" --json
 ```
 
 This is where memory stops being a database. The block is ordered identity → memory →
 task, and retrieved text is fenced in `<memory>` with an explicit instruction that it may
-be stale and must never be treated as instructions. `--budget` caps the block in
-characters; entries are never cut mid-way, and if the "N more entries omitted" footer
-does not fit, the footer goes, not the memory.
+be stale and must never be treated as instructions. `--budget` caps memory characters;
+`--max-tokens` caps estimated tokens (default from `memory.context_token_budget`). Whole
+entries are preserved and lower-ranked hits are dropped until both caps fit. `memory stats`
+reports the configured character and token budgets; `context --json` includes actual token
+use and the number of omitted hits.
 
 ### Daemon
 
@@ -320,7 +330,7 @@ The only I/O in this tree lives in `src/net/` (~400 lines, no async runtime):
 - **No CLI framework.** Parsing is ~100 lines with tests. Same reason the provider layer
   hand-rolls SSE: a flat dependency tree and a fast start.
 - **Commands never call `process::exit`.** They return a typed `CmdError`; `run()` maps it
-  to a code. That is what makes 28 end-to-end tests possible with an injected `$HOME` and
+  to a code. That is what makes 31 black-box CLI tests possible with an injected `$HOME` and
   captured output, and it is why nothing here touches the real home directory in tests.
 - **Errors name the file.** A broken `config.json` is reported with its path, and a corrupt
   memory file is refused rather than overwritten.

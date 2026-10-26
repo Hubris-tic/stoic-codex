@@ -8,8 +8,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use stoic_codex_agent::{
-    provisional_name, run_mission, AgentConfig, Event, MissionConfig, MissionEvent, Operator,
-    OperatorState, Repo, Verdict, VerifyCommand, PHALANX, STRATEGOS,
+    provisional_name, run_mission, AgentConfig, Event, MissionConfig, MissionEvent, MissionOutcome,
+    Operator, OperatorState, Repo, Verdict, VerifyCommand, PHALANX, STRATEGOS,
 };
 
 use crate::args::Parsed;
@@ -303,11 +303,15 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
                 "error": f.error,
                 "elapsed_ms": f.elapsed_ms,
             })).collect::<Vec<_>>(),
+            "outcome": report.outcome().code(),
             "applied": report.applied_count(),
             "conflicts": report.conflicts().iter()
                 .map(|(f, owner, other)| serde_json::json!({"file": f, "owner": owner, "other": other}))
                 .collect::<Vec<_>>(),
             "commit": report.commit,
+            "commit_error": report.commit_error,
+            "review_failed": report.review_failed,
+            "cleanup_warnings": report.cleanup_warnings,
             "parallel_ms": report.parallel_ms,
             "review_note": report.review_note,
         });
@@ -320,15 +324,20 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     }
 
     let _ = writeln!(ctx.out, "{}", report.table());
+    let outcome = report.outcome();
     let _ = writeln!(
         ctx.out,
-        "\n{STRATEGOS} · base {base} · {n} operator(s) of {PHALANX} · {ms} ms in parallel · plan {source}",
+        "\n{STRATEGOS} · base {base} · {n} operator(s) of {PHALANX} · {ms} ms in parallel · plan {source} · outcome {outcome}",
         base = report.base,
         n = report.operators.len(),
         ms = report.parallel_ms,
-        source = report.plan.source.label()
+        source = report.plan.source.label(),
+        outcome = outcome.label()
     );
     let _ = writeln!(ctx.out, "{}", report.review_note);
+    for warning in &report.cleanup_warnings {
+        let _ = writeln!(ctx.out, "warning  {warning}");
+    }
 
     if report.applied_count() == 0 {
         let _ = writeln!(ctx.out, "applied  nothing");
@@ -353,10 +362,10 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     finish(&report)
 }
 
-/// Exit code: a mission where nothing usable landed is a failure even if every model
-/// answered politely.
+/// Exit 1 only when nothing applicable landed. A partial mission stays exit 0 so useful work
+/// is not discarded, while the summary/JSON outcome exposes that the mission was incomplete.
 fn finish(report: &stoic_codex_agent::MissionReport) -> CmdResult {
-    if report.applied_count() == 0 {
+    if report.outcome() == MissionOutcome::Failed {
         let failed = report
             .operators
             .iter()

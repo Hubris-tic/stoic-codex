@@ -484,7 +484,7 @@ fn a_mission_where_nothing_lands_exits_with_failure() {
 }
 
 #[test]
-fn a_operators_that_fails_does_not_take_the_mission_down() {
+fn two_unusable_operators_are_reported_as_partial_but_useful_work_exits_zero() {
     let repo = Repo::new("one-fails");
     let stub = Stub::script(
         "one-fails",
@@ -498,8 +498,8 @@ fn a_operators_that_fails_does_not_take_the_mission_down() {
             write("gamma.txt", "gamma\n"),
             done("done"),
             review(
-                &[("x1-write", true), ("x2-check", false), ("x3-ship", true)],
-                "partial",
+                &[("x1-write", true), ("x2-check", false), ("x3-ship", false)],
+                "two operators did not deliver usable work",
             ),
         ],
     );
@@ -516,10 +516,12 @@ fn a_operators_that_fails_does_not_take_the_mission_down() {
     ]);
     assert_eq!(code, OK, "out:\n{}\nerr:\n{}", rig.out(), rig.err());
     assert!(repo.exists("alpha.txt"));
-    assert!(repo.exists("gamma.txt"));
+    assert!(!repo.exists("gamma.txt"), "rejected work reached the tree");
 
     let out = rig.out();
+    assert!(out.contains("partial success"), "{out}");
     assert!(out.contains("x2-check"), "{out}");
+    assert!(out.contains("x3-ship"), "{out}");
     // The unknown tool is answered, not fatal — the loop reports it back to the model.
     let requests = stub.join();
     assert!(
@@ -655,6 +657,8 @@ fn mission_run_json_reports_every_operators_and_the_commit() {
 
     let value: serde_json::Value = serde_json::from_str(rig.out().trim()).expect("valid JSON");
     assert_eq!(value["strategos"], "Strategos");
+    assert_eq!(value["outcome"], "complete");
+    assert_eq!(value["review_failed"], false);
     assert_eq!(value["applied"], 3);
     assert!(value["commit"].is_string(), "{}", value["commit"]);
     let members = value["operators"].as_array().unwrap();
@@ -666,6 +670,43 @@ fn mission_run_json_reports_every_operators_and_the_commit() {
     }
     assert_eq!(value["conflicts"].as_array().unwrap().len(), 0);
     // --json keeps stderr quiet, so the JSON is the whole output.
+    assert!(rig.err().is_empty(), "{}", rig.err());
+}
+
+#[test]
+fn mission_run_json_marks_partial_success_while_preserving_exit_zero() {
+    let repo = Repo::new("partial-json");
+    let stub = Stub::script(
+        "partial-json",
+        vec![
+            three_way_plan(),
+            write("alpha.txt", "alpha\n"),
+            done("done"),
+            nothing(),
+            nothing(),
+            review(
+                &[("x1-write", true), ("x2-check", false), ("x3-ship", false)],
+                "two assignments produced no usable changes",
+            ),
+        ],
+    );
+    let mut rig = Rig::new("partial-json", &stub.base_url());
+
+    let code = rig.invoke(&[
+        "mission",
+        "run",
+        "add one file per code",
+        "--repo",
+        repo.root.to_str().unwrap(),
+        "--parallel",
+        "1",
+        "--json",
+    ]);
+    assert_eq!(code, OK, "stderr:\n{}", rig.err());
+
+    let value: serde_json::Value = serde_json::from_str(rig.out().trim()).expect("valid JSON");
+    assert_eq!(value["outcome"], "partial_success");
+    assert_eq!(value["applied"], 1);
     assert!(rig.err().is_empty(), "{}", rig.err());
 }
 

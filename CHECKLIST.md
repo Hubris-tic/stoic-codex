@@ -1,11 +1,14 @@
 # Stoic Codex — remaining work
 
-Status as of **2026-10-26**. The seven local crates were just rebuilt and tested with stable Rust
-1.99.1 under `/var/tmp`: 561 tests passed, 0 failed, and 4 network/live tests were skipped by default.
-`cargo build --all-targets` passed for all seven local crates. Targeted rustfmt checks pass for the
-files changed in this follow-up; the CLI package's `cargo fmt --check` still reports pre-existing
-drift in `paths.rs`, `transcript.rs`, and `tests/config_migration.rs`, which were not reformatted.
-The separate upstream-fork integration patch was not included in this local-crate validation.
+Status as of **2026-10-26**. The seven local crates were rebuilt and tested with stable Rust
+1.99.1 under `/var/tmp`: **575 tests passed, 0 failed, and 4 network/live tests were skipped** by
+default. `cargo build --all-targets` passed for all seven local crates with no warnings. The optional
+TypeDB feature also builds cleanly and its non-live tests pass; actual daemon-backed checks remain
+open because no local TypeDB address was configured. Targeted rustfmt checks pass for the files
+changed in the reliability follow-up; the CLI package's `cargo fmt --check` still reports
+pre-existing drift in `paths.rs`, `transcript.rs`, and `tests/config_migration.rs`, which were not
+reformatted. The separate upstream-fork integration patch was not included in this local-crate
+validation.
 
 Legend: `[ ]` open · `[x]` done and verified · **S/M/L** = rough size · `live` = verified against
 a real service, not a stub.
@@ -139,28 +142,42 @@ just because its model is listed here.
 - [ ] **Retries inside a mission.** `RemoteModel` uses the standard policy, but a mission has N
       operators hitting one rate limit at once; the backoff needs the mission's own jitter seed
       and a cap on total wall clock. **M**
-- [ ] **Partial failure policy** — if 2 of 3 operators fail, the mission currently reviews what it
-      has. Decide whether that is a success, and say so in the report line and the exit code. **S**
-- [ ] **Worktree cleanup** — `.git/stoic-codex-missions/<code>` is never pruned; a tenth mission
-      leaves nine stale trees and their branches. **S**
-- [ ] **`--parallel` scheduling test** with a slow model: assert the wall clock is closer to
-      max(t) than sum(t). **S**
-- [ ] **Sandbox review**: confirm what an operator can write outside its worktree, and add a test
-      for the answer. The claim "git writes belong to the orchestrator" needs a proof. **M**
+- [x] **Partial failure policy.** Useful-work first: exit 0 if at least one applicable file lands,
+      even if other operators fail/reject; exit 1 only when nothing lands. The terminal summary says
+      `outcome partial success`; `--json` emits `partial_success` / `complete` / `failed`. End-to-end
+      tests cover two unusable operators out of three and both text and JSON reports. **S**
+- [x] **Worktree cleanup and recovery.** Default clean runs remove the mission worktrees and
+      branches whose complete file sets landed. Rejected/partly applied branches survive; changes
+      written before a provider failure are committed to a recovery branch, and a failed recovery
+      commit keeps the dirty worktree with a warning instead of discarding data. Cleanup failures
+      are surfaced in `MissionReport.cleanup_warnings` and JSON. Real-Git tests cover pruning,
+      conflict recovery, provider failure, failed commits, and `--keep-worktrees`. **M**
+- [x] **`--parallel` scheduling test.** Three slow scripted Operators overlap; the test records
+      peak concurrency and asserts elapsed time is closer to the slowest Operator than serial sum.
+      **S**
+- [x] **Sandbox review.** Found and closed a real write escape through a dangling symlink to a
+      missing external file: `Path::exists()` followed it and treated it as absent. Resolution now
+      uses `symlink_metadata` and fails closed if canonicalization fails; both resolver and actual
+      `WriteFile` regression tests prove no file is created outside the worktree. **S**
 
 ---
 
 ## 5. Memory (M)
 
-- [ ] **TypeDB parity sweep** — the daemon is not currently running here
-      (`/var/tmp/typedb/…/typedb server --server.listen-address 127.0.0.1:1729 …`); start it and
-      re-run `cargo test --features typedb` to confirm the 7 live tests still pass against 3.14.1.
-      **S**
+- [ ] **TypeDB parity sweep** — `cargo build --all-targets --features typedb` and the 93 unit tests
+      pass. The seven `typedb_live` test functions return early because no local address was set;
+      they did not exercise a daemon. Start TypeDB 3.14.1 on loopback and run
+      `STOIC_CODEX_TYPEDB_ADDR=127.0.0.1:1729 cargo test --features typedb --test typedb_live`
+      before marking graph parity verified. **S**
 - [ ] **Vector recall quality** — recall is lexical-ish scoring; measure it against a fixed set of
       queries with expected hits, and record the baseline in `memory/README.md`. Without a
       baseline, "improved recall" is unfalsifiable. **M**
-- [ ] **Eviction and growth caps** — `context_budget` is enforced in characters; enforce the
-      token budget too (the estimator is calibrated for exactly this). **S**
+- [x] **Eviction and growth caps** — prompt memory now obeys both `memory.context_budget`
+      (characters) and `memory.context_token_budget` (estimated tokens; default 400) using the
+      calibrated estimator. Lower-ranked hits are dropped whole until both caps fit, in both
+      `run` and `context`; stats and context JSON report configured/used budgets. Unit and loopback
+      tests cover digit-heavy memory, prove the request stays under cap, and verify untrusted
+      multiline labels cannot forge entry counts or break the memory fence. **S**
 - [ ] **Migration path** between the JSON store and TypeDB, with a test that round-trips. **M**
 
 ---
@@ -200,8 +217,9 @@ just because its model is listed here.
 ## 8. Release gate (do not tag before all of these)
 
 - [x] All seven local crates: `cargo build --all-targets` passed with no warnings; `cargo test`
-      passed 561 tests, 0 failed (4 live/network tests skipped by default). The separate upstream
-      integration patch was not part of this local-crate run.
+      passed **575 tests, 0 failed** (4 live/network tests skipped by default). The optional TypeDB
+      feature build and non-live tests pass; daemon-backed integration remains open. The separate
+      upstream integration patch was not part of this local-crate run.
 - [ ] `cargo test -- --ignored` green **with a key present** for Gemini; skipped-with-message
       (not failed) without one.
 - [ ] One live mission: 3 operators, real repo, real worktrees, one commit, using a provider the
@@ -217,7 +235,7 @@ just because its model is listed here.
 
 ---
 
-## 9. Active request — Stoic Codex branch cleanup and sync
+## 9. Completed request — Stoic Codex branch cleanup and promotion
 
 The public destination is `Hubris-tic/stoic-codex`; retain both `main` and the existing feature
 branch `agent/zenithal-workspace-sync-2026-10-26`. The user has now authorized a non-forced
@@ -227,12 +245,12 @@ work in the workspace sync.
 
 - [x] Static review of the source rebrand, `.zenithal` config migration, and `ZENITHAL_*`
       compatibility aliases; historical TypeDB database ID preserved.
-- [x] Compile and test the seven local crates with stable Rust 1.99.1: `cargo build --all-targets`
-      passed for each; `cargo test` passed 561 tests, 0 failed, with 4 live/network tests skipped
-      by default. Targeted rustfmt checks passed on this follow-up's Rust files. The CLI package's
-      `cargo fmt --check` still flags pre-existing drift in `paths.rs`, `transcript.rs`, and
-      `tests/config_migration.rs`; these were not reformatted. **Unverified:** the separate
-      upstream-fork integration patch was not compiled in this run.
+- [x] **Pre-promotion validation (historical):** with stable Rust 1.99.1, `cargo build
+      --all-targets` passed for each local crate and `cargo test` passed 561 tests, 0 failed (4
+      live/network tests skipped). Targeted rustfmt checks passed for that follow-up. The CLI's
+      package-wide `cargo fmt --check` still flags pre-existing drift in `paths.rs`, `transcript.rs`,
+      and `tests/config_migration.rs`; these were not reformatted. The separate upstream-fork
+      integration patch was not compiled in that run.
 - [x] Earlier sync: transferred the workspace, scanned the staged diff and secrets, and pushed
       implementation commit `5a7bb0d17e31c17f8b6636675876cc990c10af26` plus checklist follow-up
       `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3` to the selected feature branch. At that stage,
@@ -258,6 +276,14 @@ work in the workspace sync.
       `970111f6cb62cc02fe36a82ea7d71b37a2889c97` to feature commit
       `8edeba9bee576ee6256cb9adbc9f1f1d8b85dc18`; no force push or merge commit. This checklist
       update is being kept on both `main` and the feature branch.
+- [x] **Mission and memory reliability follow-up (2026-10-26):** closed the dangling-symlink
+      write escape; made mission results distinguish complete/partial/failed; preserved provider-
+      failure edits on recovery branches; surfaced cleanup issues; tested real-Git cleanup and
+      parallel overlap. Prompt memory now obeys character and calibrated-token caps, reports actual
+      usage, and escapes untrusted line/markup injection; run/context and zero-budget cases are
+      covered. All seven local crates build cleanly and pass **575 tests, 0 failed** (4 live/network
+      tests skipped); optional TypeDB feature builds with 93 unit tests but its daemon tests were
+      not live. `git diff --check` and targeted rustfmt pass; the upstream-fork patch is unverified.
 - [ ] Finish credential cleanup: PAT #1's local copy was revoked (HTTP 202) and removed; PAT #2
       was unavailable locally and still needs manual revocation. The later pasted PAT's revocation
       request returned HTTP 422, so it must also be revoked in GitHub settings; its local copies

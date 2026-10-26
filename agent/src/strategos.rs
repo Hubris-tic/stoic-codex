@@ -481,11 +481,65 @@ pub struct MissionReport {
     pub base: String,
     pub parallel_ms: u64,
     pub review_note: String,
+    /// True when Strategos could not complete its requested review.
+    pub review_failed: bool,
+    /// A mission commit failure leaves the applied files in the user's working tree.
+    pub commit_error: Option<String>,
+    /// Cleanup problems are visible instead of being silently discarded.
+    pub cleanup_warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissionOutcome {
+    Complete,
+    PartialSuccess,
+    Failed,
+}
+
+impl MissionOutcome {
+    /// Human-readable outcome for the terminal summary.
+    pub fn label(self) -> &'static str {
+        match self {
+            MissionOutcome::Complete => "complete",
+            MissionOutcome::PartialSuccess => "partial success",
+            MissionOutcome::Failed => "failed",
+        }
+    }
+
+    /// Stable machine-readable outcome for JSON reports.
+    pub fn code(self) -> &'static str {
+        match self {
+            MissionOutcome::Complete => "complete",
+            MissionOutcome::PartialSuccess => "partial_success",
+            MissionOutcome::Failed => "failed",
+        }
+    }
 }
 
 impl MissionReport {
     pub fn applied_count(&self) -> usize {
         self.operators.iter().map(|f| f.applied.len()).sum()
+    }
+
+    /// Any landed work keeps the exit code successful, but the report makes incomplete work
+    /// explicit so humans and JSON consumers can distinguish it from a complete mission.
+    pub fn outcome(&self) -> MissionOutcome {
+        if self.applied_count() == 0 {
+            return MissionOutcome::Failed;
+        }
+        let incomplete = self.review_failed
+            || self.commit_error.is_some()
+            || !self.cleanup_warnings.is_empty()
+            || self.operators.iter().any(|result| {
+                result.state != OperatorState::Succeeded
+                    || result.verdict == Verdict::Rejected
+                    || result.applied.len() < result.files.len()
+            });
+        if incomplete {
+            MissionOutcome::PartialSuccess
+        } else {
+            MissionOutcome::Complete
+        }
     }
 
     pub fn conflicts(&self) -> Vec<(String, String, String)> {
@@ -642,7 +696,7 @@ pub fn run_mission(
 
     // ── 4. Strategos reviews what came back.
     let mut results = results;
-    let review_note = if cfg.review {
+    let (review_note, review_failed) = if cfg.review {
         observer(MissionEvent::Reviewing {
             reports: results.len(),
         });
@@ -657,7 +711,10 @@ pub fn run_mission(
                     plan: plan.clone(),
                     verdicts,
                 });
-                format!("{} reviewed {} report(s)", STRATEGOS, results.len())
+                (
+                    format!("{} reviewed {} report(s)", STRATEGOS, results.len()),
+                    false,
+                )
             }
             Err(e) => {
                 // A failed review must not lose work that is already done: accept whatever
@@ -668,7 +725,10 @@ pub fn run_mission(
                         r.reason = "accepted unreviewed: the review step failed".into();
                     }
                 }
-                format!("{STRATEGOS} could not review ({e}); every clean result was kept")
+                (
+                    format!("{STRATEGOS} could not review ({e}); every clean result was kept"),
+                    true,
+                )
             }
         }
     } else {
@@ -678,7 +738,10 @@ pub fn run_mission(
                 r.reason = "review disabled".into();
             }
         }
-        "review disabled: every clean result was kept".to_string()
+        (
+            "review disabled: every clean result was kept".to_string(),
+            false,
+        )
     };
 
     // ── 5. Apply accepted files, one at a time, first writer wins.
@@ -737,27 +800,71 @@ pub fn run_mission(
         }
     }
 
-    // ── 7. Clean up. Worktrees first, then branches (only if their work landed).
-    let branches: Vec<String> = worktrees.iter().map(|w| w.branch().to_string()).collect();
-    let landed: Vec<String> = results
+    // ── 7. Clean up. Never discard uncommitted recovery work, and only delete a branch when
+    // every file it produced is present in the user's working tree.
+    let branches: Vec<(String, String)> = worktrees
         .iter()
-        .filter(|r| !r.applied.is_empty())
-        .map(|r| r.codename.clone())
+        .zip(operators.iter())
+        .map(|(wt, operator)| (wt.branch().to_string(), operator.codename.clone()))
         .collect();
+    let mut retained_worktree_branches = Vec::new();
+    let mut cleanup_warnings = Vec::new();
     if !cfg.keep_worktrees {
-        for wt in worktrees {
-            let _ = wt.clone().remove();
+        for (operator, wt) in operators.iter().zip(worktrees.iter()) {
+            let (dirty, inspect_failed) = match wt.git(&["status", "--porcelain"]) {
+                Ok(status) => (!status.trim().is_empty(), false),
+                Err(e) => {
+                    cleanup_warnings.push(format!(
+                        "could not inspect {}'s worktree; kept it for recovery: {e}",
+                        operator.codename
+                    ));
+                    (true, true)
+                }
+            };
+            if dirty {
+                if !inspect_failed {
+                    cleanup_warnings.push(format!(
+                        "kept {}'s worktree because it still contains uncommitted changes",
+                        operator.codename
+                    ));
+                }
+                retained_worktree_branches.push(wt.branch().to_string());
+                continue;
+            }
+            if let Err(e) = wt.clone().remove() {
+                cleanup_warnings.push(format!(
+                    "could not remove {}'s worktree; kept its branch for recovery: {e}",
+                    operator.codename
+                ));
+                retained_worktree_branches.push(wt.branch().to_string());
+            }
         }
-        if owns_root {
-            let _ = std::fs::remove_dir_all(&root);
+        if owns_root && retained_worktree_branches.is_empty() && root.exists() {
+            if let Err(e) = std::fs::remove_dir_all(&root) {
+                cleanup_warnings.push(format!("could not remove mission worktree directory: {e}"));
+            }
         }
-        let _ = repo.git(&["worktree", "prune"]);
+        if let Err(e) = repo.git(&["worktree", "prune"]) {
+            cleanup_warnings.push(format!("could not prune Git worktree metadata: {e}"));
+        }
+    } else {
+        retained_worktree_branches.extend(worktrees.iter().map(|wt| wt.branch().to_string()));
     }
     if !cfg.keep_branches {
-        for (branch, codename) in branches.iter().zip(operators.iter().map(|f| &f.codename)) {
-            // Keep a branch whose work did *not* land: it holds the only copy.
-            if landed.contains(codename) {
-                let _ = repo.delete_branch(branch);
+        for (branch, codename) in &branches {
+            if retained_worktree_branches.contains(branch) {
+                continue;
+            }
+            let has_unapplied_work = results
+                .iter()
+                .find(|result| &result.codename == codename)
+                .is_some_and(|result| {
+                    !result.files.is_empty() && result.applied.len() < result.files.len()
+                });
+            if !has_unapplied_work {
+                if let Err(e) = repo.delete_branch(branch) {
+                    cleanup_warnings.push(format!("could not delete branch {branch}: {e}"));
+                }
             }
         }
     }
@@ -785,7 +892,8 @@ pub fn run_mission(
         conflicts,
     });
 
-    let review_note = match note_commit_failure {
+    let commit_error = note_commit_failure;
+    let review_note = match &commit_error {
         Some(note) => format!("{review_note} · {note}"),
         None => review_note,
     };
@@ -798,6 +906,9 @@ pub fn run_mission(
         base,
         parallel_ms,
         review_note,
+        review_failed,
+        commit_error,
+        cleanup_warnings,
     })
 }
 
@@ -890,7 +1001,7 @@ fn run_operators(
         });
     };
 
-    match run_agent(
+    let agent_failed = match run_agent(
         member.model.as_ref(),
         &registry,
         task,
@@ -903,35 +1014,39 @@ fn run_operators(
             result.tool_calls = outcome.tool_calls;
             result.usage = outcome.usage;
             result.stop = Some(outcome.stop);
+            false
         }
         Err(e) => {
-            result.state = OperatorState::Failed;
             result.error = Some(describe(&e));
-            result.elapsed_ms = started.elapsed().as_millis() as u64;
-            observer(MissionEvent::Returned {
-                codename: member.codename.clone(),
-                state: result.state,
-            });
-            return result;
+            true
         }
-    }
+    };
 
-    // Harvest whatever is on disk, even after a step/tool limit: a partial change that a
-    // reviewer accepts is worth more than nothing.
+    // Harvest even after a provider/tool-loop error. The partial result stays untrusted and
+    // cannot be applied, but committing it to its isolated branch lets the user recover it.
     match wt.changed_files() {
         Ok(files) => result.files = files,
-        Err(e) => result.error = Some(e.to_string()),
+        Err(e) => add_result_error(
+            &mut result,
+            format!("could not inspect worktree changes: {e}"),
+        ),
     }
     result.patch = wt.patch().unwrap_or_default();
-    result.commit = match wt.commit_all(&format!("stoic-codex: {} — {}", member.codename, short(task)))
-    {
+    result.commit = match wt.commit_all(&format!(
+        "stoic-codex: {} — {}",
+        member.codename,
+        short(task)
+    )) {
         Ok(sha) => sha,
         Err(e) => {
-            result.error.get_or_insert(e.to_string());
+            add_result_error(
+                &mut result,
+                format!("could not commit worktree changes: {e}"),
+            );
             None
         }
     };
-    result.state = if result.error.is_some() {
+    result.state = if agent_failed || result.error.is_some() {
         OperatorState::Failed
     } else if result.files.is_empty() {
         OperatorState::Empty
@@ -939,14 +1054,16 @@ fn run_operators(
         OperatorState::Succeeded
     };
 
-    if let Some(cmd) = &cfg.verify {
-        let (ok, output) = verify(wt.path(), cmd);
-        result.verified = Some(ok);
-        result.verify_output = output;
-        observer(MissionEvent::Verified {
-            codename: member.codename.clone(),
-            ok,
-        });
+    if !agent_failed {
+        if let Some(cmd) = &cfg.verify {
+            let (ok, output) = verify(wt.path(), cmd);
+            result.verified = Some(ok);
+            result.verify_output = output;
+            observer(MissionEvent::Verified {
+                codename: member.codename.clone(),
+                ok,
+            });
+        }
     }
 
     result.elapsed_ms = started.elapsed().as_millis() as u64;
@@ -955,6 +1072,16 @@ fn run_operators(
         state: result.state,
     });
     result
+}
+
+fn add_result_error(result: &mut OperatorResult, detail: String) {
+    match &mut result.error {
+        Some(existing) => {
+            existing.push_str("; ");
+            existing.push_str(&detail);
+        }
+        None => result.error = Some(detail),
+    }
 }
 
 fn describe(error: &AgentError) -> String {

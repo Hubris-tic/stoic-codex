@@ -307,7 +307,7 @@ pub fn help_text() -> String {
     h.push_str(
         "  stoic-codex context <query>                print the memory block injected into a prompt\n",
     );
-    h.push_str("                                        (--budget, --system-only, --json)\n");
+    h.push_str("                                        (--budget chars, --max-tokens N, --system-only, --json)\n");
 
     h.push_str("\nDAEMON\n");
     h.push_str(

@@ -52,8 +52,9 @@ pub use loop_::{
 pub use sandbox::{Sandbox, SandboxError};
 pub use strategos::{
     code_line, name_codes, name_phalanx, provisional_name, run_mission, Assignment, Code,
-    MissionConfig, MissionError, MissionEvent, MissionReport, Operator, OperatorResult,
-    OperatorState, Plan, PlanSource, Verdict, VerifyCommand, CODES, PHALANX, STRATEGOS,
+    MissionConfig, MissionError, MissionEvent, MissionOutcome, MissionReport, Operator,
+    OperatorResult, OperatorState, Plan, PlanSource, Verdict, VerifyCommand, CODES, PHALANX,
+    STRATEGOS,
 };
 pub use tool::{Tool, ToolOutcome, ToolRegistry};
 pub use worktree::{FileChange, GitError, Repo, Worktree};

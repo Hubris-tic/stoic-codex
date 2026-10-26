@@ -719,3 +719,76 @@ fn a_turn_with_memory_puts_it_in_the_system_prompt() {
         "retrieved text must be labelled untrusted: {request}"
     );
 }
+
+#[test]
+fn a_run_drops_lower_ranked_memory_until_the_configured_token_cap_fits() {
+    let stub = Stub::start(openai_sse(&["ok"]));
+    let mut rig = Rig::pointed("memory-token-cap", &stub.base_url(), "");
+    set_key("memory-token-cap", "k");
+
+    let config_path = rig.home.join(".stoic-codex/config.json");
+    let mut config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+    config["memory"]["context_token_budget"] = serde_json::json!(100);
+    std::fs::write(&config_path, serde_json::to_vec(&config).unwrap()).unwrap();
+
+    assert_eq!(
+        rig.run(&[
+            "memory",
+            "remember",
+            "doc:short",
+            "short",
+            "--text",
+            "token short context",
+            "--importance",
+            "1.0",
+        ]),
+        OK
+    );
+    let digits = format!("token {}", "1234567890 ".repeat(40));
+    assert_eq!(
+        rig.run(&[
+            "memory",
+            "remember",
+            "doc:digits",
+            "digits",
+            "--text",
+            &digits,
+            "--importance",
+            "0.1",
+        ]),
+        OK
+    );
+
+    assert_eq!(rig.run(&["run", "token short"]), OK, "{}", rig.err());
+    let requests = stub.join();
+    let body = request_body(&requests[0]);
+    let system = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|message| message["role"] == "system")
+        .unwrap()["content"]
+        .as_str()
+        .unwrap();
+    assert!(
+        system.contains("doc:short"),
+        "highest-ranked memory was lost: {system}"
+    );
+    assert!(
+        !system.contains("doc:digits"),
+        "expensive low-ranked memory stayed: {system}"
+    );
+    let block = system
+        .split("<memory>\n")
+        .nth(1)
+        .unwrap()
+        .split("\n</memory>")
+        .next()
+        .unwrap();
+    assert!(
+        stoic_codex_providers::tokens::estimate(block) <= 100,
+        "memory block exceeded its configured cap: {} tokens",
+        stoic_codex_providers::tokens::estimate(block)
+    );
+}

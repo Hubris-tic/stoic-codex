@@ -493,6 +493,7 @@ fn the_in_memory_backend_is_available_and_says_it_does_not_persist() {
         stats["persistent"], false,
         "a non-persistent store must never look persistent"
     );
+    assert_eq!(stats["context_token_budget"], 400);
 }
 
 // ─── context: the injection path ────────────────────────────────────────────
@@ -564,12 +565,22 @@ fn context_json_is_machine_readable_and_respects_the_budget() {
     rig.run(&["memory", "why", "token"]);
     println!("WHY: {}", rig.out());
     assert_eq!(
-        rig.run(&["context", "token", "--budget", "300", "--json"]),
+        rig.run(&[
+            "context",
+            "token",
+            "--budget",
+            "300",
+            "--max-tokens",
+            "100",
+            "--json",
+        ]),
         OK
     );
     let payload: serde_json::Value =
         serde_json::from_str(&rig.out()).expect("context --json must parse");
     assert_eq!(payload["budget"], 300);
+    assert_eq!(payload["token_budget"], 100);
+    assert!(payload["memory_tokens"].as_u64().unwrap() <= 100);
     let system = payload["system"].as_str().unwrap();
     assert!(
         system.chars().count() < 1200,
@@ -577,6 +588,20 @@ fn context_json_is_machine_readable_and_respects_the_budget() {
     );
     println!("PAYLOAD: {}", rig.out());
     assert!(payload["memory_entries"].as_u64().unwrap() >= 1);
+}
+
+#[test]
+fn context_rejects_a_zero_token_override() {
+    let mut rig = Rig::new("context-zero-token-budget");
+    assert_eq!(
+        rig.run(&["context", "anything", "--max-tokens", "0"]),
+        USAGE
+    );
+    assert!(
+        rig.err().contains("--max-tokens must be at least 1"),
+        "{}",
+        rig.err()
+    );
 }
 
 #[test]

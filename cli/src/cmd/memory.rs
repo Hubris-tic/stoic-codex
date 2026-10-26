@@ -14,7 +14,7 @@ use crate::args::Parsed;
 use crate::cmd::{CmdError, CmdResult};
 use crate::config::Config;
 use crate::paths::Paths;
-use crate::session::{self, MemoryBlock};
+use crate::session;
 use crate::Ctx;
 
 /// Open the store described by the config, keeping the config for the caller's own use.
@@ -270,6 +270,7 @@ fn stats(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             "config": paths.config_file().to_string_lossy(),
             "file_store": paths.memory_file().to_string_lossy(),
             "context_budget": cfg.memory.context_budget,
+            "context_token_budget": cfg.memory.context_token_budget,
         });
         let _ = writeln!(
             ctx.out,
@@ -301,16 +302,12 @@ fn stats(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     );
     let _ = writeln!(ctx.out, "config       {}", paths.config_file().display());
     let _ = writeln!(ctx.out, "file store   {}", paths.memory_file().display());
-    let _ = writeln!(ctx.out, "budget       {} chars", cfg.memory.context_budget);
+    let _ = writeln!(
+        ctx.out,
+        "budget       {} chars / {} tokens",
+        cfg.memory.context_budget, cfg.memory.context_token_budget
+    );
     Ok(())
-}
-
-/// Count the memory entries the store kept, using its `- [kind] label` line format.
-fn count_entries(block: &str) -> usize {
-    block
-        .lines()
-        .filter(|line| line.trim_start().starts_with("- ["))
-        .count()
 }
 
 /// `stoic-codex context <query>` — the whole point of the memory layer: a prompt block.
@@ -328,20 +325,25 @@ pub fn context(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
             .map_err(|_| CmdError::usage(format!("--budget must be a number, got `{b}`")))?,
         None => cfg.memory.context_budget,
     };
-    let text = opened.store.context(&hits, budget);
-    // Report what actually fit in the budget, not what was recalled: the two differ once
-    // the block is truncated, and the honest number is the one the prompt contains.
-    let block = MemoryBlock {
-        entries: count_entries(&text),
-        characters: text.chars().count(),
-        text,
+    let token_budget = match parsed.value("max-tokens") {
+        Some(b) => b
+            .parse()
+            .map_err(|_| CmdError::usage(format!("--max-tokens must be a number, got `{b}`")))?,
+        None => cfg.memory.context_token_budget,
     };
+    if token_budget == 0 {
+        return Err(CmdError::usage("--max-tokens must be at least 1"));
+    }
+    let block = session::pack_memory(&opened.store, &hits, budget, token_budget);
     let composed = session::compose(&query.text, &block);
 
     if parsed.switch("json") {
         let payload = serde_json::json!({
             "backend": opened.choice.as_str(),
             "budget": budget,
+            "token_budget": token_budget,
+            "recalled_entries": hits.len(),
+            "omitted_entries": hits.len().saturating_sub(composed.memory_entries),
             "memory_entries": composed.memory_entries,
             "memory_characters": composed.memory_characters,
             "memory_tokens": composed.memory_tokens,
@@ -367,7 +369,7 @@ pub fn context(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let _ = writeln!(ctx.out, "{}", composed.user);
     let _ = writeln!(
         ctx.err,
-        "injected {} memor{} ({} chars ≈ {} tok of a {} char budget) from {}",
+        "injected {} memor{} ({} chars ≈ {} tok; caps {} chars / {} tok) from {}",
         composed.memory_entries,
         if composed.memory_entries == 1 {
             "y"
@@ -377,6 +379,7 @@ pub fn context(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         composed.memory_characters,
         composed.memory_tokens,
         budget,
+        token_budget,
         opened.choice.as_str()
     );
     Ok(())

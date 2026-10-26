@@ -5,8 +5,8 @@ trait**, with a bundled TypeDB daemon when you want a real graph database and an
 in-process store when you do not.
 
 ```bash
-cargo test                                   # 90 tests, no server, no network
-cargo test --features typedb                 # 92 + the driver backend compiling
+cargo test                                   # 91 tests, no server, no network
+cargo test --features typedb                 # 93 unit tests + 7 daemon-gated integration tests
 STOIC_CODEX_TYPEDB_ADDR=127.0.0.1:1729 \
   cargo test --features typedb --test typedb_live    # 7 live tests against a local daemon
 ```

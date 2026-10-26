@@ -165,12 +165,12 @@ pub fn turn(
     } else {
         let o = crate::cmd::open_store(paths)?;
         let block = match o.store.recall(&Query::new(task.clone())) {
-            Ok(hits) if !hits.is_empty() => MemoryBlock {
-                text: o.store.context(&hits, cfg.memory.context_budget),
-                entries: hits.len(),
-                characters: 0,
-            },
-            Ok(_) => MemoryBlock::empty(),
+            Ok(hits) => session::pack_memory(
+                &o.store,
+                &hits,
+                cfg.memory.context_budget,
+                cfg.memory.context_token_budget,
+            ),
             Err(e) => return Err(CmdError::failed(format!("memory recall failed: {e}"))),
         };
         opened = Some(o);

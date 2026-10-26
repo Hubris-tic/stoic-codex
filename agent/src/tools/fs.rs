@@ -645,6 +645,28 @@ mod tests {
         assert!(out.content.contains(".git"), "{}", out.content);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn writing_through_a_dangling_external_symlink_is_refused() {
+        let f = Fixture::new("dangling-symlink");
+        let outside = f.dir.with_extension("outside");
+        std::os::unix::fs::symlink(&outside, f.dir.join("dangling-link")).unwrap();
+
+        let out = WriteFile::new(f.sandbox()).invoke(&serde_json::json!({
+            "path": "dangling-link",
+            "content": "must remain inside the worktree",
+        }));
+        let escaped = outside.exists();
+        let _ = std::fs::remove_file(&outside);
+
+        assert!(
+            out.is_error,
+            "write was unexpectedly allowed: {}",
+            out.content
+        );
+        assert!(!escaped, "write created a file outside the worktree");
+    }
+
     #[test]
     fn escaping_the_root_is_refused_by_every_path_tool() {
         let f = Fixture::new("escape");

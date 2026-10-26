@@ -51,14 +51,21 @@ committee. One agent decides, three agents work, one agent judges.
   file, so it cannot break the repository while thinking about it.
 - **An operator is confined to its worktree.** Its own `Sandbox`, its own `ToolRegistry`,
   its own model client (a `Model` that carries connection state must not be shared across
-  threads). The sandbox rejects absolute paths, `..`, symlink escapes and `.git` writes.
+  threads). The sandbox rejects absolute paths, `..`, symlink escapes (including dangling
+  external links) and `.git` writes.
 - **Nothing is merged.** Accepted work is copied file-by-file with `Worktree::copy_file_to`.
   If two operators changed one file, the first accepted one wins and the other is reported
   as a `Conflict` — never silently blended.
-- **Rejected work is not lost.** It stays committed on `stoic-codex/<code>`; only branches whose
-  files actually landed are deleted.
+- **Rejected or partly applied work is not lost.** It stays committed on `stoic-codex/<code>`;
+  a branch is deleted only when all of its changed files landed (or it had no changes).
+- **Provider failures preserve partial edits.** If an Operator wrote files before its model failed,
+  the orchestrator stages and commits that untrusted work to the recovery branch but never applies
+  it. If that recovery commit fails, the dirty worktree is kept and cleanup reports a warning.
 - **Git writes belong to the orchestrator.** No model-callable tool can commit, check out,
   or touch `.git`.
+- **Partial outcomes are explicit.** `MissionReport::outcome()` distinguishes `Complete`,
+  `PartialSuccess`, and `Failed`; partial work remains a successful exit when at least one
+  applicable file landed, while the CLI summary and JSON identify the partial outcome.
 
 ### It degrades instead of failing
 
@@ -145,7 +152,7 @@ stoic-codex mission run  "…" --no-review --no-commit      # look before you le
 | `src/sandbox.rs` | path confinement for every tool |
 | `src/worktree.rs` | `Repo`, `Worktree`, branches, patches, `copy_file_to` |
 | `src/strategos.rs` | **the orchestrator**: plan → deploy → execute → review → apply → commit |
-| `tests/mission.rs` | 11 end-to-end tests: real git repo, real worktrees, scripted models |
+| `tests/mission.rs` | 16 end-to-end tests: real git repo, real worktrees, scripted models |
 
 ## Tests
 
@@ -155,9 +162,9 @@ cd stoic-codex/agent && cargo test
 
 | Suite | Tests |
 |---|---|
-| unit (`src/*.rs`) | 73 |
-| `tests/mission.rs` (real git, real worktrees, real threads) | 11 |
-| **total** | **84**, 0 warnings |
+| unit (`src/*.rs`) | 75 |
+| `tests/mission.rs` (real git, real worktrees, real threads) | 16 |
+| **total** | **91**, 0 warnings |
 
 A verbatim run of the whole thing, including the repository state afterwards, is in
 `MISSION-DEMO.md` — reproducible with `cli/dev/stub_mission.py`, no key required.
