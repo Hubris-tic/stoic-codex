@@ -219,9 +219,11 @@ just because its model is listed here.
 
 ## 9. Active request — Stoic Codex branch cleanup and sync
 
-The public destination is `Hubris-tic/stoic-codex`; preserve `main` and work only on the existing
-feature branch `agent/zenithal-workspace-sync-2026-10-26`. Do not push to `main`. Preserve upstream
-identifiers and include the pre-existing transcript/context-budget work in the workspace sync.
+The public destination is `Hubris-tic/stoic-codex`; retain both `main` and the existing feature
+branch `agent/zenithal-workspace-sync-2026-10-26`. The user has now authorized a non-forced
+fast-forward promotion of all validated feature-branch commits to `main`; that promotion is
+complete. Preserve upstream identifiers and include the pre-existing transcript/context-budget
+work in the workspace sync.
 
 - [x] Static review of the source rebrand, `.zenithal` config migration, and `ZENITHAL_*`
       compatibility aliases; historical TypeDB database ID preserved.
@@ -231,17 +233,18 @@ identifiers and include the pre-existing transcript/context-budget work in the w
       `cargo fmt --check` still flags pre-existing drift in `paths.rs`, `transcript.rs`, and
       `tests/config_migration.rs`; these were not reformatted. **Unverified:** the separate
       upstream-fork integration patch was not compiled in this run.
-- [x] Transferred the workspace, scanned the staged diff and secrets, and pushed implementation
-      commit `5a7bb0d17e31c17f8b6636675876cc990c10af26` plus checklist follow-up
-      `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3` to the selected feature branch only. No `main`
-      push.
-- [x] Renamed the GitHub repository to `Hubris-tic/stoic-codex` and updated the remote. Before
-      this checklist follow-up, the feature branch was at `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3`
-      and `main` remained at `970111f6cb62cc02fe36a82ea7d71b37a2889c97`; no `main` push.
+- [x] Earlier sync: transferred the workspace, scanned the staged diff and secrets, and pushed
+      implementation commit `5a7bb0d17e31c17f8b6636675876cc990c10af26` plus checklist follow-up
+      `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3` to the selected feature branch. At that stage,
+      there was no `main` push.
+- [x] Renamed the GitHub repository to `Hubris-tic/stoic-codex` and updated the remote. At the
+      time of that earlier checklist follow-up, the feature branch was at
+      `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3` and `main` was at
+      `970111f6cb62cc02fe36a82ea7d71b37a2889c97`.
 - [x] **Delete all other remote branches.** User confirmed keeping only `main` and
       `agent/zenithal-workspace-sync-2026-10-26`. The public ref listing found 4,709 branches;
-      4,707 were deleted. A fresh `git ls-remote --heads` verified that exactly the two requested
-      branches remain, with `main` unchanged.
+      4,707 were deleted. A fresh `git ls-remote --heads` at the time verified exactly the two
+      requested branches remained; the later authorized promotion changed `main`'s commit only.
 - [x] **TUI cosmetic follow-up (requested priority):** welcome screen, contextual help-sheet views,
       compact `? help` footer, and 40-column unified diff; 69 TUI tests pass and all previews were
       regenerated and inspected. Pushed only to the feature branch; app-shell `?`/Escape dispatch
@@ -249,9 +252,12 @@ identifiers and include the pre-existing transcript/context-budget work in the w
 - [x] **Non-TUI follow-up:** corrected stale identity guards; added the validated 1–10 retry-count
       override across run, agent, mission, and provider requests; flushes EOF-terminated SSE usage;
       updated docs and regression tests. All seven local crates pass (561 tests); implementation
-      commit `a3e2b7f375b8fb185708ac44ac9e535709f885e0` is pushed only to
-      `agent/zenithal-workspace-sync-2026-10-26`. `main` remains unchanged at
-      `970111f6cb62cc02fe36a82ea7d71b37a2889c97`.
+      commit `a3e2b7f375b8fb185708ac44ac9e535709f885e0` and validation checklist commit
+      `8edeba9bee576ee6256cb9adbc9f1f1d8b85dc18` were pushed to the feature branch.
+- [x] **Authorized promotion to `main`:** fast-forwarded `main` from
+      `970111f6cb62cc02fe36a82ea7d71b37a2889c97` to feature commit
+      `8edeba9bee576ee6256cb9adbc9f1f1d8b85dc18`; no force push or merge commit. This checklist
+      update is being kept on both `main` and the feature branch.
 - [ ] Finish credential cleanup: PAT #1's local copy was revoked (HTTP 202) and removed; PAT #2
       was unavailable locally and still needs manual revocation. The later pasted PAT's revocation
       request returned HTTP 422, so it must also be revoked in GitHub settings; its local copies
