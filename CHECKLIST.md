@@ -19,10 +19,14 @@ Studio, OpenRouter, Groq, and local models. No paid Anthropic/OpenAI calls, and 
 service. Rate-card estimates are not billing records; do not infer that an API request was free
 just because its model is listed here.
 
-- [ ] **Revoke the two pasted PATs.** Both were pasted in chat and must be treated as public.
-      Keep only PAT #1's successor in `~/.github_pat` (0600).
-      Verify with `~/bin/gh-env && curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-      https://api.github.com/user | head -3`. **S**
+- [ ] **Finish GitHub credential cleanup.** GitHub accepted an unauthenticated revocation request
+      for the locally available PAT #1 (HTTP 202); its local copies were deleted. PAT #2 was not
+      available locally and still needs revocation in GitHub settings. A later pasted PAT
+      authenticated but had no push/admin permission on `Hubris-tic/stoic-codex`; its revocation
+      request returned HTTP 422, so revoke it manually in GitHub settings. A subsequent invalid
+      candidate returned HTTP 401 and was removed. The current write-capable keeper PAT is installed
+      at `~/.github_pat` with mode 0600 and verified for `Hubris-tic/stoic-codex`; never print or
+      commit its value. Rotate the Gemini key. **S**
 - [ ] **Rotate the Gemini key** at the end of any live-testing round
       (`https://aistudio.google.com/apikey`). It lives only at
       `/home/user/.zenithal-keys/gemini` (dir 700, file 600) and is passed by env var — but a
@@ -201,22 +205,32 @@ just because its model is listed here.
 
 ---
 
-## 9. Active request — Stoic Codex public rename and sync
+## 9. Active request — Stoic Codex branch cleanup and sync
 
-The selected public destination is `Hubris-tic/stoic-codex`; push only to the existing branch
-`agent/zenithal-workspace-sync-2026-10-26`. Do not push to `main`. Preserve upstream identifiers
-and include the pre-existing transcript/context-budget work in the same workspace sync.
+The public destination is `Hubris-tic/stoic-codex`; preserve `main` and work only on the existing
+feature branch `agent/zenithal-workspace-sync-2026-10-26`. Do not push to `main`. Preserve upstream
+identifiers and include the pre-existing transcript/context-budget work in the workspace sync.
 
 - [x] Static review of the source rebrand, `.zenithal` config migration, and `ZENITHAL_*`
       compatibility aliases; historical TypeDB database ID preserved.
 - [ ] Compile and test the Rust changes. **Not verified**: this environment has no `cargo` or
       `rustc`; no Rust test result is claimed for the rename/session changes.
-- [x] Transferred the workspace to `/var/tmp/zenithal-push`, scanned the staged diff and secrets,
-      and committed/pushed to the selected feature branch only: `5a7bb0d17e31c17f8b6636675876cc990c10af26`.
-      No `main` push.
-- [x] Renamed the GitHub repository to `Hubris-tic/stoic-codex`, updated the local push remote,
-      and verified that the selected branch points to that commit; `main` remains untouched.
-- [ ] Revoke both pasted GitHub PATs, keep only the keeper PAT's rotated successor, and rotate the
+- [x] Transferred the workspace, scanned the staged diff and secrets, and pushed implementation
+      commit `5a7bb0d17e31c17f8b6636675876cc990c10af26` plus checklist follow-up
+      `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3` to the selected feature branch only. No `main`
+      push.
+- [x] Renamed the GitHub repository to `Hubris-tic/stoic-codex` and updated the remote. Before
+      this checklist follow-up, the feature branch was at `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3`
+      and `main` remained at `970111f6cb62cc02fe36a82ea7d71b37a2889c97`; no `main` push.
+- [x] **Delete all other remote branches.** User confirmed keeping only `main` and
+      `agent/zenithal-workspace-sync-2026-10-26`. The public ref listing found 4,709 branches;
+      4,707 were deleted. A fresh `git ls-remote --heads` verified that exactly the two requested
+      branches remain, with `main` unchanged.
+- [ ] Finish credential cleanup: PAT #1's local copy was revoked (HTTP 202) and removed; PAT #2
+      was unavailable locally and still needs manual revocation. The later pasted PAT's revocation
+      request returned HTTP 422, so it must also be revoked in GitHub settings; its local copies
+      were removed. The invalid candidate's temporary file was removed. The current write-capable
+      keeper PAT is installed at `~/.github_pat` (0600) for `Hubris-tic/stoic-codex`. Rotate the
       Gemini key. Credential values must never be printed or committed; see §0.
 
 ## A. Verified in the preceding validation round — with the evidence, so it does not get re-litigated
