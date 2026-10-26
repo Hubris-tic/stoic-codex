@@ -441,6 +441,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
+ "serde_derive",
 ]
 
 [[package]]
@@ -530,6 +531,47 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "stoic-codex-agent"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "stoic-codex-brand",
+ "stoic-codex-providers",
+]
+
+[[package]]
+name = "stoic-codex-brand"
+version = "0.1.0"
+
+[[package]]
+name = "stoic-codex-providers"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "stoic-codex-tui-views"
+version = "0.1.0"
+dependencies = [
+ "crossterm",
+ "nullgeo",
+ "ratatui",
+ "serde_json",
+ "stoic-codex-agent",
+ "stoic-codex-ui-core",
+]
+
+[[package]]
+name = "stoic-codex-ui-core"
+version = "0.1.0"
+dependencies = [
+ "stoic-codex-brand",
+]
 
 [[package]]
 name = "strsim"
@@ -757,28 +799,6 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
-
-[[package]]
-name = "stoic-codex-brand"
-version = "0.1.0"
-
-[[package]]
-name = "stoic-codex-tui-views"
-version = "0.1.0"
-dependencies = [
- "crossterm",
- "nullgeo",
- "ratatui",
- "serde_json",
- "stoic-codex-ui-core",
-]
-
-[[package]]
-name = "stoic-codex-ui-core"
-version = "0.1.0"
-dependencies = [
- "stoic-codex-brand",
-]
 
 [[package]]
 name = "zmij"

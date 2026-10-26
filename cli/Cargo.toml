@@ -14,6 +14,7 @@ stoic-codex-brand = { path = "../brand" }
 stoic-codex-providers = { path = "../providers" }
 stoic-codex-memory = { path = "../memory" }
 stoic-codex-agent = { path = "../agent" }
+stoic-codex-tui-views = { path = "../tui", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

@@ -15,6 +15,7 @@ use crate::theme as t;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelpContext {
     Welcome,
+    Chat,
     Mission,
     Diff,
     Memory,
@@ -25,6 +26,7 @@ impl HelpContext {
     pub fn label(self) -> &'static str {
         match self {
             HelpContext::Welcome => "WELCOME",
+            HelpContext::Chat => "CHAT",
             HelpContext::Mission => "MISSION",
             HelpContext::Diff => "DIFF REVIEW",
             HelpContext::Memory => "MEMORY GRAPH",
@@ -41,12 +43,20 @@ fn bindings(context: HelpContext) -> &'static [(&'static str, &'static str)] {
             ("Esc", "Close this key guide"),
             ("q", "Quit Stoic Codex"),
         ],
-        HelpContext::Mission => &[
-            ("↑ / ↓", "Select an operator"),
-            ("Enter", "Inspect the selected operator"),
+        HelpContext::Chat => &[
+            ("Enter", "Send the follow-up prompt"),
+            ("PgUp / PgDn", "Scroll the conversation"),
             ("?", "Open or close this key guide"),
-            ("Esc", "Close this key guide"),
-            ("q", "Quit Stoic Codex"),
+            ("Esc", "Close the guide or chat"),
+            ("Ctrl+C", "Close the chat"),
+        ],
+        HelpContext::Mission => &[
+            ("↑ / ↓ · j / k", "Select an operator"),
+            ("Enter", "Open or close operator detail"),
+            ("?", "Open or close this key guide"),
+            ("Esc", "Close detail or the key guide"),
+            ("q", "Close the mission board"),
+            ("Ctrl+C", "Close the mission board"),
         ],
         HelpContext::Diff => &[
             ("n / N", "Next / previous file"),
@@ -164,6 +174,18 @@ mod tests {
         assert!(text.contains("MISSION"), "{text}");
         assert!(text.contains("Select an operator"), "{text}");
         assert!(text.contains("? / Esc close"), "{text}");
+    }
+
+    #[test]
+    fn chat_sheet_explains_the_follow_up_input_and_scroll_keys() {
+        let mut terminal = Terminal::new(TestBackend::new(60, 18)).unwrap();
+        terminal
+            .draw(|frame| render(frame, frame.area(), HelpContext::Chat))
+            .unwrap();
+        let text = screen(&terminal);
+        assert!(text.contains("CHAT"), "{text}");
+        assert!(text.contains("Send the follow-up prompt"), "{text}");
+        assert!(text.contains("Scroll the conversation"), "{text}");
     }
 
     #[test]

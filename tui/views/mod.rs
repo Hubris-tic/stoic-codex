@@ -17,6 +17,7 @@
 //! 2. **One red thing per region.** The selected row, the active tab, the failing state —
 //!    pick one. Anything else is grey, and grey is what makes the red mean something.
 
+#[cfg(feature = "blackhole")]
 pub mod blackhole;
 pub mod diff_review;
 pub mod help;

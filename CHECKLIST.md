@@ -1,14 +1,14 @@
 # Stoic Codex — remaining work
 
-Status as of **2026-10-26**. The seven local crates were rebuilt and tested with stable Rust
-1.99.1 under `/var/tmp`: **585 tests passed, 0 failed, and 4 network/live tests were skipped** by
-default. `cargo build --all-targets` passed for all seven local crates with no warnings. The optional
-TypeDB feature also builds cleanly and its non-live tests pass; actual daemon-backed checks remain
-open because no local TypeDB address was configured. Targeted rustfmt checks pass for the files
-changed in the reliability follow-up; the CLI package's `cargo fmt --check` still reports
-pre-existing drift in `paths.rs`, `transcript.rs`, and `tests/config_migration.rs`, which were not
-reformatted. The separate upstream-fork integration patch was not included in this local-crate
-validation.
+Status as of **2026-10-26**. The seven local crates were tested with stable Rust 1.99.1 under
+`/var/tmp`: **603 tests passed, 0 failed, and 4 network/live tests were ignored** by default.
+`cargo build --all-targets --locked --offline` passed for all seven crates with no warnings. The
+optional TypeDB feature also builds cleanly and its non-live tests pass; actual daemon-backed checks
+remain open because no local TypeDB address was configured. Targeted rustfmt checks pass for the
+changed Rust sources except `tui/views/mission_board.rs`, which retains pre-existing formatting
+drift and was kept localized; the CLI package's `cargo fmt --check` still reports pre-existing drift
+in `paths.rs`, `transcript.rs`, and `tests/config_migration.rs`, which were not reformatted. The
+separate upstream-fork integration patch was not included in this local-crate validation.
 
 Legend: `[ ]` open · `[x]` done and verified · **S/M/L** = rough size · `live` = verified against
 a real service, not a stub.
@@ -105,11 +105,17 @@ just because its model is listed here.
 
 ## 3. TUI (S–M each)
 
-- [ ] **Feed the board from `MissionEvent`.** `run_mission` already emits
-      `Planning / Named / Planned / Deployed / …`; nothing subscribes. Write the app shell:
-      a channel, an event→`Mission`/`MissionBoardState` reducer, a tick loop
-      (`state.tick(dt)`, `anim.tick(dt)`), and key handling. Then `Preview`/`Mission` in
-      `ui-core` stops being fed by fixtures only. **L**
+- [x] **Feed the board from `MissionEvent`.** `MissionTui` now receives owned events over a
+      channel while the mission worker runs; `reduce_mission_event` updates the UI-core
+      `Mission`/`MissionBoardState`, the 40 ms loop advances `state.tick(dt)`, and key handling
+      covers selection, `?` help, and close. The CLI opens it only on interactive text runs;
+      JSON/quiet/piped/`--no-tui` paths stay unchanged. TestBackend reducer/render tests and the
+      complete TUI crate suite pass (**82 tests**). **L**
+- [x] **Interactive `run` chat surface.** TTY `run` renders full-height conversation history,
+      live streamed assistant text, a pinned follow-up input, status/accounting, scroll and help;
+      `--no-tui`, `--json`, `--dry-run`, and redirected output keep the one-shot path. Follow-up
+      turns reuse the local session unless `--no-session`. No live provider was called for this UI
+      work; CLI and TUI tests cover routing/state/reducer behavior. **M**
 - [x] **Animations** — running operators spin (braille, 10 fps), the newest feed line flashes and
       fades, the hole gained an orbiting hot spot, twinkling stars, a two-harmonic photon ring, a
       glowing inner rim and an outer edge that dissolves. `tui/DESIGN.md` §"The rest of the app
@@ -128,9 +134,10 @@ just because its model is listed here.
       below 72 columns; 40-column welcome, mission, help, and diff snapshots are regenerated and
       visually inspected. The contextual help sheet fills the narrow width to avoid leaking a
       strip of the underlying diff at its edges; a regression test covers that case. **S**
-- [ ] **Wire the contextual key guide.** The welcome and per-view help-sheet renderers are now
-      present, and footers preserve a compact `? help` affordance. The app shell still needs to
-      dispatch `?`/Escape to show/dismiss the overlay. **S**
+- [ ] **Wire the contextual key guide across the remaining views.** `ChatTui` and `MissionTui`
+      now dispatch `?`/Escape for their help sheets. Welcome, diff, memory, and hole renderers still
+      need dispatch from a top-level navigator; their current `? help` affordances are presentation
+      only. **S**
 
 ---
 

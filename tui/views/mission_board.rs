@@ -439,6 +439,22 @@ fn field(label: &str, value: &str, value_style: Style) -> Line<'static> {
     ])
 }
 
+fn fit_tail(value: &str, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+    let chars: Vec<char> = value.chars().collect();
+    if chars.len() <= width {
+        return value.to_string();
+    }
+    format!(
+        "…{}",
+        chars[chars.len() - width.saturating_sub(1)..]
+            .iter()
+            .collect::<String>()
+    )
+}
+
 /// The right pane: what the selected member is doing, on what branch, with what verdict.
 pub fn render_detail(frame: &mut Frame, area: Rect, state: &MissionBoardState) {
     let Some(a) = state.selected_agent() else {
@@ -467,8 +483,11 @@ pub fn render_detail(frame: &mut Frame, area: Rect, state: &MissionBoardState) {
         lines.push(field("tools", "none — it plans and reviews", t::muted()));
         lines.push(field("role", "commander of the Operator", t::muted()));
     } else {
-        lines.push(field("branch", a.branch.as_deref().unwrap_or("—"), t::accent()));
-        lines.push(field("worktree", a.worktree.as_deref().unwrap_or("—"), t::muted()));
+        let path_width = area.width.saturating_sub(14) as usize;
+        let branch = fit_tail(a.branch.as_deref().unwrap_or("—"), path_width);
+        let worktree = fit_tail(a.worktree.as_deref().unwrap_or("—"), path_width);
+        lines.push(field("branch", &branch, t::accent()));
+        lines.push(field("worktree", &worktree, t::muted()));
         lines.push(field(
             "verdict",
             a.verdict.label(),
@@ -522,12 +541,12 @@ pub fn render_detail(frame: &mut Frame, area: Rect, state: &MissionBoardState) {
         &format!("{} accepted · {} rejected", s.accepted, s.rejected),
         if s.rejected > 0 { t::warn() } else { t::good() },
     ));
+    let cost = cost_label(state);
     let budget = if state.mission.budget_micros == 0 {
-        format!("${:.2} (no cap)", s.spent_usd())
+        format!("{cost} (no cap)")
     } else {
         format!(
-            "${:.2} of ${:.2}",
-            s.spent_usd(),
+            "{cost} of ${:.2}",
             state.mission.budget_micros as f64 / 1_000_000.0
         )
     };
@@ -561,6 +580,27 @@ fn render_board_with_feed(frame: &mut Frame, area: Rect, state: &MissionBoardSta
     );
     if chunks[2].height > 0 {
         render_activity(frame, chunks[2], state);
+    }
+}
+
+fn cost_label(state: &MissionBoardState) -> String {
+    let has_usage = state
+        .mission
+        .agents
+        .iter()
+        .any(|agent| agent.input_tokens > 0 || agent.output_tokens > 0);
+    let has_unpriced_usage = state.mission.agents.iter().any(|agent| {
+        (agent.input_tokens > 0 || agent.output_tokens > 0) && agent.micros == 0
+    });
+    let has_any_cost = state.mission.agents.iter().any(|agent| agent.micros > 0);
+    if has_unpriced_usage || (!has_usage && !has_any_cost) {
+        return "—".into();
+    }
+    let micros = state.mission.spent_micros();
+    if micros < 10_000 {
+        "<$0.01".into()
+    } else {
+        format!("${:.2}", micros as f64 / 1_000_000.0)
     }
 }
 
@@ -607,7 +647,7 @@ pub fn render_screen(frame: &mut Frame, area: Rect, state: &MissionBoardState) {
     let chrome = Chrome::new(state.mission.base.clone(), &chrome::TABS, TAB_MISSION)
         .with_branch_status()
         .status(running)
-        .status(Segment::new(format!("${:.2}", s.spent_usd()), t::muted()))
+        .status(Segment::new(format!("cost {}", cost_label(state)), t::muted()))
         .footer(Segment::chip(format!("● {} operators", s.operators)))
         .footer(Segment::chip(format!("{} accepted", s.accepted)))
         .hint("↑↓ select · enter detail · ? help · q quit");
@@ -785,6 +825,33 @@ mod tests {
             .map(|c| c.symbol())
             .collect();
         assert!(screen.contains("stoic-codex mission run"), "{screen}");
+    }
+
+    #[test]
+    fn unknown_usage_cost_is_not_displayed_as_zero_dollars() {
+        let mut m = mission();
+        m.agents[1].input_tokens = 900;
+        assert_eq!(cost_label(&MissionBoardState::new(m)), "—");
+
+        let mut m = mission();
+        m.agents[1].input_tokens = 900;
+        m.agents[1].micros = 2_000_000;
+        assert_eq!(cost_label(&MissionBoardState::new(m)), "$2.00");
+
+        let mut m = mission();
+        m.agents[1].input_tokens = 900;
+        m.agents[1].micros = 1_200;
+        assert_eq!(cost_label(&MissionBoardState::new(m)), "<$0.01");
+    }
+
+    #[test]
+    fn narrow_detail_keeps_the_worktree_path_suffix() {
+        assert_eq!(
+            fit_tail("/home/user/.git/stoic-codex-missions/x1-write", 18),
+            "…missions/x1-write"
+        );
+        assert_eq!(fit_tail("short", 18), "short");
+        assert_eq!(fit_tail("long", 0), "");
     }
 
     #[test]

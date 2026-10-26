@@ -397,8 +397,8 @@ zero.
   local/BYOK framing, and optional workspace/provider/model/recent-mission details. It does not
   invent connection state when the caller has no data.
 - Added contextual help-sheet rendering for welcome, mission, diff, memory, and hole views. The
-  sheet is a raised-void overlay with no outline box; the app shell still needs to dispatch `?`
-  and Escape to show and dismiss it.
+  sheet is a raised-void overlay with no outline box; the later app-shell implementation in
+  `APP_SHELL.md` now dispatches `?` and Escape for chat and mission screens.
 - Narrow footers now preserve a compact `? help` route before status chips. The mission, diff, and
   memory hints advertise the same contextual guide.
 - Diff review now uses a stacked unified layout below 72 columns in the diff pane. It shows context
@@ -415,6 +415,26 @@ zero.
   generated 48 fresh animation-frame JSON files. The renderer produced all 12 PNGs and a 48-frame
   `hole.gif` (788×428, 120 ms/frame); GIF metadata and sampled-frame differences were checked, and
   every static wide/narrow/40-column PNG was visually inspected.
-- The help renderer remains presentation-only: app-shell dispatch for `?` and Escape is still
-  unimplemented. This run does not validate the broader CLI/session changes or the full upstream
-  workspace.
+- App-shell dispatch for `?`, Escape, scrolling, and live MissionEvent updates was implemented
+  after this cosmetic pass; the **69-test** result remains as historical context. This pass did not
+  validate the broader CLI/session changes or the full upstream workspace.
+
+---
+
+# Part 4 — interactive app shell validation (2026-10-26)
+
+- `ChatTui` now provides the TTY `stoic-codex run` transcript, streamed assistant output, a pinned
+  follow-up composer, session continuation, help/scroll keys, and a segmented bottom footer. It
+  retains the newest 200 visible messages; JSON, dry-run, redirected, and `--no-tui` execution stay
+  on the one-shot path.
+- `MissionTui` consumes live `MissionEvent` values through a reducer and 40 ms event loop. It tracks
+  the actual worker worktree path, selection/detail/help keys, worker disconnects, and a final report
+  snapshot for return paths without a `Returned` event. Closing the board does not cancel work.
+- Mission cost is shown as unknown when token usage is not priced, not as `$0.00`. The CLI-only TUI
+  dependency disables the optional black-hole physics tracer; the standalone TUI keeps its
+  default-enabled, no-GPU animation.
+- TUI tests pass **82/82**. The full seven-crate locked offline test run passes **603 tests**, with
+  four explicitly ignored network/live tests. No provider calls were made for this UI work.
+- TestBackend covers chat/mission layout and reducer behavior without a real terminal. Rustfmt was
+  applied to the touched Rust files except the pre-existing unformatted mission-board file, whose
+  narrow changes were kept isolated. See `APP_SHELL.md` for the shell details.

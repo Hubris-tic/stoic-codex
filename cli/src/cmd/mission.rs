@@ -4,9 +4,10 @@
 //! the library deliberately refuses to own: resolving providers, printing progress a human
 //! can follow while three agents type at once, and deciding an exit code.
 
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
+use std::thread;
 use std::time::Duration;
 
 use stoic_codex_agent::{
@@ -197,6 +198,19 @@ fn plan_only(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     Ok(())
 }
 
+fn should_enable_mission_tui(
+    parsed: &Parsed,
+    stdout_is_terminal: bool,
+    stderr_is_terminal: bool,
+) -> bool {
+    parsed.switch("tui")
+        && !parsed.switch("no-tui")
+        && !parsed.switch("json")
+        && !parsed.switch("quiet")
+        && stdout_is_terminal
+        && stderr_is_terminal
+}
+
 fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     let task = parsed.rest()[1.min(parsed.rest().len())..]
         .join(" ")
@@ -206,7 +220,7 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
         return Err(CmdError::usage(
             "usage: stoic-codex mission run <task…> [--agents 3] [--repo DIR] [--base REF]\n\
              \x20      [--verify \"cargo test\"] [--no-review] [--no-commit] [--keep-worktrees]\n\
-             \x20      [--keep-branches] [--parallel N] [--provider ID] [--model M] [--max-attempts N] [--json]",
+             \x20      [--keep-branches] [--parallel N] [--provider ID] [--model M] [--max-attempts N] [--json] [--no-tui]",
         ));
     }
     let (cfg, resolved) = resolve(parsed, paths)?;
@@ -219,14 +233,53 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     ));
     let quiet = parsed.switch("quiet");
     let json = parsed.switch("json");
-    let retry_sink = ctx.err.clone();
-    let retry_notice: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |message| {
-        if quiet || json {
-            return;
+    let requested_tui = should_enable_mission_tui(
+        parsed,
+        std::io::stdout().is_terminal(),
+        std::io::stderr().is_terminal(),
+    );
+    let mission_tui = if requested_tui {
+        match stoic_codex_tui_views::app::MissionTui::enter(
+            &task,
+            resolved.repo.root().display().to_string(),
+            n,
+            &resolved.model,
+        ) {
+            Ok(tui) => Some(tui),
+            Err(error) => {
+                let _ = writeln!(
+                    ctx.err,
+                    "could not open the mission board ({error}); using the text log"
+                );
+                None
+            }
         }
-        let mut sink = retry_sink.clone();
-        let _ = writeln!(sink, "{}", row("[mission]", "retry", message));
-    });
+    } else {
+        None
+    };
+    let use_tui = mission_tui.is_some();
+    let (ui_sender, ui_receiver) = if use_tui {
+        let (sender, receiver) = mpsc::channel::<stoic_codex_tui_views::app::MissionUiEvent>();
+        (Some(sender), Some(receiver))
+    } else {
+        (None, None)
+    };
+    let retry_notice: Arc<dyn Fn(&str) + Send + Sync> = if let Some(sender) = ui_sender.clone() {
+        Arc::new(move |message| {
+            let _ = sender.send(stoic_codex_tui_views::app::MissionUiEvent::Notice(
+                message.to_string(),
+            ));
+        })
+    } else {
+        let retry_sink = ctx.err.clone();
+        Arc::new(move |message| {
+            if quiet || json {
+                return;
+            }
+            let mut sink = retry_sink.clone();
+            let _ = writeln!(sink, "{}", row("[mission]", "retry", message));
+        })
+    };
 
     // Strategos gets its own client: a plan cannot be confused with an Operator turn.
     let strategos = RemoteModel::new_for_mission(
@@ -279,32 +332,96 @@ fn mission(parsed: &Parsed, paths: &Paths, ctx: &mut Ctx) -> CmdResult {
     };
     mission_cfg.max_parallel = mission_cfg.max_parallel.max(1);
 
-    // A cloned sink: `Sink` is `Send + Sync` and serialises its own writes, so three agents
-    // can report at once without interleaving half-lines. The clone happens inside the
-    // closure so it stays `Fn` (the mission may call it from several threads).
-    let sink = ctx.err.clone();
-    let observe = move |event: MissionEvent| {
-        if quiet || json {
-            return;
-        }
-        let mut w = sink.clone();
-        // Events with nothing to say (token deltas) print nothing at all, not a blank line:
-        // an interleaved log is hard enough to read without gaps in it.
-        let line = log_line(&event);
-        if !line.is_empty() {
-            let _ = writeln!(w, "{line}");
-        }
+    // The live board receives owned MissionEvents over a channel. The text path keeps its
+    // serialized stderr rows; both observers are Sync so parallel Operators can report safely.
+    let observe: Arc<dyn Fn(MissionEvent) + Send + Sync> = if let Some(sender) = ui_sender.clone() {
+        Arc::new(move |event| {
+            let _ = sender.send(stoic_codex_tui_views::app::MissionUiEvent::Mission(event));
+        })
+    } else {
+        let sink = ctx.err.clone();
+        Arc::new(move |event| {
+            if quiet || json {
+                return;
+            }
+            let mut w = sink.clone();
+            let line = log_line(&event);
+            if !line.is_empty() {
+                let _ = writeln!(w, "{line}");
+            }
+        })
     };
 
-    let report = run_mission(
-        &resolved.repo,
-        &strategos,
-        operators,
-        &task,
-        &mission_cfg,
-        &observe,
-    )
-    .map_err(|e| CmdError::failed(e.to_string()))?;
+    let report = if let (Some(sender), Some(receiver), Some(mut tui)) =
+        (ui_sender, ui_receiver, mission_tui)
+    {
+        let repo = resolved.repo;
+        let worker_sender = sender.clone();
+        drop(sender);
+        let handle = thread::spawn(move || {
+            let result = run_mission(
+                &repo,
+                &strategos,
+                operators,
+                &task,
+                &mission_cfg,
+                observe.as_ref(),
+            );
+            let finished = result
+                .as_ref()
+                .map(|report| stoic_codex_tui_views::app::MissionUiFinal {
+                    outcome: report.outcome().label().to_string(),
+                    operators: report
+                        .operators
+                        .iter()
+                        .map(|operator| stoic_codex_tui_views::app::MissionUiOperator {
+                            codename: operator.codename.clone(),
+                            task: operator.task.clone(),
+                            state: operator.state,
+                            verdict: operator.verdict,
+                            reason: if operator.reason.is_empty() {
+                                operator.error.clone().unwrap_or_default()
+                            } else {
+                                operator.reason.clone()
+                            },
+                            input_tokens: operator.usage.input_tokens,
+                            output_tokens: operator.usage.output_tokens,
+                            elapsed_ms: operator.elapsed_ms,
+                        })
+                        .collect(),
+                    applied: report.applied_count(),
+                    conflicts: report.conflicts().len(),
+                })
+                .map_err(ToString::to_string);
+            let _ = worker_sender.send(stoic_codex_tui_views::app::MissionUiEvent::Finished(
+                finished,
+            ));
+            result
+        });
+        let ui_result = tui.run(receiver);
+        drop(tui);
+        let report = handle
+            .join()
+            .map_err(|_| CmdError::failed("mission worker panicked"))?
+            .map_err(|error| CmdError::failed(error.to_string()))?;
+        if let Err(error) = ui_result {
+            let _ = writeln!(
+                ctx.err,
+                "warning: mission finished but the board closed: {error}"
+            );
+        }
+        report
+    } else {
+        run_mission(
+            &resolved.repo,
+            &strategos,
+            operators,
+            &task,
+            &mission_cfg,
+            observe.as_ref(),
+        )
+        .map_err(|error| CmdError::failed(error.to_string()))?
+    };
 
     if json {
         let payload = serde_json::json!({
@@ -471,7 +588,9 @@ fn log_line(event: &MissionEvent) -> String {
             out
         }
 
-        MissionEvent::Deployed { codename, branch } => row(
+        MissionEvent::Deployed {
+            codename, branch, ..
+        } => row(
             "[strategos]",
             "deploy",
             &format!("{codename:<12} branch={branch}"),
@@ -563,6 +682,32 @@ mod tests {
         }
     }
 
+    fn parsed(words: &[&str]) -> Parsed {
+        crate::args::parse(
+            &words
+                .iter()
+                .map(|word| word.to_string())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn mission_board_requires_both_terminal_streams_and_text_mode() {
+        let terminal = parsed(&["mission", "run", "task", "--tui"]);
+        assert!(should_enable_mission_tui(&terminal, true, true));
+        assert!(!should_enable_mission_tui(&terminal, false, true));
+        assert!(!should_enable_mission_tui(&terminal, true, false));
+
+        for flag in ["--no-tui", "--json", "--quiet"] {
+            let text_mode = parsed(&["mission", "run", "task", "--tui", flag]);
+            assert!(
+                !should_enable_mission_tui(&text_mode, true, true),
+                "{flag} must preserve the script path"
+            );
+        }
+    }
+
     #[test]
     fn every_line_starts_with_a_bracketed_code_on_its_own_column() {
         let events = vec![
@@ -571,6 +716,7 @@ mod tests {
             MissionEvent::Deployed {
                 codename: "x1-write".into(),
                 branch: "stoic-codex/x1-write".into(),
+                worktree: "/repo/.git/stoic-codex-missions/x1-write".into(),
             },
             MissionEvent::Agent {
                 codename: "x2-check".into(),

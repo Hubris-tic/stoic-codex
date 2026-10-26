@@ -437,6 +437,8 @@ pub enum MissionEvent {
     Deployed {
         codename: String,
         branch: String,
+        /// Local path for the board's detail pane; never a provider/network value.
+        worktree: String,
     },
     Agent {
         codename: String,
@@ -672,6 +674,7 @@ pub fn run_mission(
                 observer(MissionEvent::Deployed {
                     codename: member.codename.clone(),
                     branch: wt.branch().to_string(),
+                    worktree: wt.path().display().to_string(),
                 });
                 worktrees.push(wt);
             }

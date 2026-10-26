@@ -7,7 +7,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-use super::{blackhole, fit};
+#[cfg(feature = "blackhole")]
+use super::blackhole;
+use super::fit;
 use crate::chrome::{self, Chrome, Segment};
 use crate::theme as t;
 
@@ -43,8 +45,18 @@ pub fn render(frame: &mut Frame, area: Rect, info: &WelcomeInfo) {
     }
     let width = area.width as usize;
     let compact = width < 64;
+    let sigil = {
+        #[cfg(feature = "blackhole")]
+        {
+            blackhole::sigil()
+        }
+        #[cfg(not(feature = "blackhole"))]
+        {
+            Line::from(Span::styled("◍", t::mark()))
+        }
+    };
     let mut lines = vec![
-        blackhole::sigil(),
+        sigil,
         Line::from(""),
         centered(
             "STOIC CODEX",

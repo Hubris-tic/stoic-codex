@@ -88,7 +88,14 @@ stoic-codex run "..." --dry-run                        # print the exact request
 stoic-codex run "..." --json                           # one JSON object: text, usage, cost
 stoic-codex run "..." --max-attempts 1                 # fail fast instead of retrying
 stoic-codex run "..." --no-session --no-memory --no-remember  # a stateless turn
+stoic-codex run "..." --no-tui                         # keep the one-shot stdout/stderr interface
 ```
+
+On an interactive terminal, `run` opens the full-height chat screen: the supplied task is
+sent immediately, the transcript uses the available vertical space, and a bottom-pinned input
+accepts follow-up turns. Press Enter to send, `?` for the key sheet, and Esc to close. Follow-ups
+continue the saved local session unless `--no-session` was selected. Redirected/piped output,
+`--json`, `--dry-run`, and `--no-tui` retain the one-shot CLI path for scripts and clean files.
 
 A turn is: recall from memory → compose the system prompt → translate through the
 provider's adapter → put it on the socket → decode the stream → print → write the exchange
@@ -212,7 +219,13 @@ stoic-codex mission run  "add per-file retry budgets"      # 3 operators in 3 gi
 stoic-codex mission run  "…" --agents 5 --parallel 3 --verify "cargo test"
 stoic-codex mission run  "…" --no-review --no-commit       # inspect before anything lands
 stoic-codex mission run  "…" --json --quiet                # machine-readable report, no progress
+stoic-codex mission run  "…" --no-tui                      # keep the text progress log
 ```
+
+In an interactive terminal, `mission run` opens the live Ratatui board: Strategos and every
+Operator row update from actual `MissionEvent`s while the worker runs. Use ↑/↓ or j/k to select,
+`?` for the key sheet, and q/Esc to close the screen; closing the view does not cancel the mission.
+JSON, quiet, redirected output, and `--no-tui` retain the existing text/script behavior.
 
 One boss — **Strategos**, no tools — plans the split, names each operator, then judges what
 comes back. Each operator gets a short-hand system code (`x1-write`, `x2-check`, …), its own

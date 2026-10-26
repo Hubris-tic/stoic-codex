@@ -982,6 +982,7 @@ fn events_describe_the_whole_mission_for_a_ui() {
 
     let planned = AtomicUsize::new(0);
     let deployed = AtomicUsize::new(0);
+    let worktree_paths = Mutex::new(Vec::new());
     let reviewed = AtomicUsize::new(0);
     let tool_calls = AtomicUsize::new(0);
     let applying = AtomicUsize::new(0);
@@ -996,7 +997,13 @@ fn events_describe_the_whole_mission_for_a_ui() {
             MissionEvent::Planned { .. } => {
                 planned.fetch_add(1, Ordering::SeqCst);
             }
-            MissionEvent::Deployed { .. } => {
+            MissionEvent::Deployed { worktree, .. } => {
+                let path = PathBuf::from(worktree);
+                assert!(
+                    path.is_dir(),
+                    "deployed worktree must be inspectable: {path:?}"
+                );
+                worktree_paths.lock().unwrap().push(path);
                 deployed.fetch_add(1, Ordering::SeqCst);
             }
             MissionEvent::Reviewed { .. } => {
@@ -1018,6 +1025,7 @@ fn events_describe_the_whole_mission_for_a_ui() {
 
     assert_eq!(planned.load(Ordering::SeqCst), 1);
     assert_eq!(deployed.load(Ordering::SeqCst), 2);
+    assert_eq!(worktree_paths.lock().unwrap().len(), 2);
     assert_eq!(reviewed.load(Ordering::SeqCst), 1);
     assert_eq!(tool_calls.load(Ordering::SeqCst), 2);
     assert_eq!(applying.load(Ordering::SeqCst), 2);

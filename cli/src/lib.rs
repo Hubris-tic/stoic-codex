@@ -238,7 +238,12 @@ pub fn help_text() -> String {
         "                                         --temperature, --continue, --resume ID,\n",
     );
     h.push_str("                                         --no-session, --no-stream, --dry-run,\n");
-    h.push_str("                                         --no-memory, --no-remember, --json)\n");
+    h.push_str(
+        "                                         --no-memory, --no-remember, --json, --no-tui)\n",
+    );
+    h.push_str(
+        "                                        interactive terminals open the full-height chat; --no-tui keeps one-shot output\n",
+    );
 
     h.push_str("\nAGENT (one agent, with tools, in this repository)\n");
     h.push_str(
@@ -265,7 +270,10 @@ pub fn help_text() -> String {
         "                                         --no-review, --no-commit, --parallel N,\n",
     );
     h.push_str(
-        "                                         --keep-worktrees, --keep-branches, --max-attempts N, --json)\n",
+        "                                         --keep-worktrees, --keep-branches, --max-attempts N, --json, --no-tui)\n",
+    );
+    h.push_str(
+        "                                        interactive terminals show the live mission board; --no-tui keeps the text log\n",
     );
     h.push_str(
         "  stoic-codex mission plan <task…>           show the assignments and stop (--max-attempts N, --json)\n",
