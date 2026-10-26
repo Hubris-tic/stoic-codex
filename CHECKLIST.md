@@ -1,11 +1,11 @@
 # Stoic Codex — remaining work
 
-Status as of **2026-10-26**. Everything ticked in §A was re-verified in the preceding validation
-round; everything unticked is either unverified, unscheduled, or blocked on something named in
-the line. Stable Rust 1.99.1 is available under `/var/tmp` for isolated TUI work: the latest TUI
-crate run passed 69 tests and its snapshots/previews were regenerated. This ephemeral toolchain
-may need reinstalling after an environment reset; the CLI/session and full-workspace changes still
-need their own compile/test pass.
+Status as of **2026-10-26**. The seven local crates were just rebuilt and tested with stable Rust
+1.99.1 under `/var/tmp`: 561 tests passed, 0 failed, and 4 network/live tests were skipped by default.
+`cargo build --all-targets` passed for all seven local crates. Targeted rustfmt checks pass for the
+files changed in this follow-up; the CLI package's `cargo fmt --check` still reports pre-existing
+drift in `paths.rs`, `transcript.rs`, and `tests/config_migration.rs`, which were not reformatted.
+The separate upstream-fork integration patch was not included in this local-crate validation.
 
 Legend: `[ ]` open · `[x]` done and verified · **S/M/L** = rough size · `live` = verified against
 a real service, not a stub.
@@ -33,9 +33,10 @@ just because its model is listed here.
       (`https://aistudio.google.com/apikey`). It lives only at
       `/home/user/.zenithal-keys/gemini` (dir 700, file 600) and is passed by env var — but a
       key you have stopped needing is a key that should not exist. **S**
-- [ ] **Confirm nothing secret is in the tree**: `git grep -nE 'AIza|AQ\.|ghp_|sk-'` → no hits.
-      Default `cargo test` does not read the key; the 4 `--ignored` live tests and explicit
-      `providers models gemini` / live commands do. **S**
+- [ ] **Audit staged changes for credentials** without echoing matched values. Use high-confidence
+      API/PAT patterns; broad `sk-` searches also hit synthetic upstream test fixtures in this fork
+      and must be reviewed as false positives rather than treated as live credentials. Default
+      `cargo test` does not read the Gemini key; ignored/live tests do. **S**
 - [ ] **Rotate the demo images** only if they embed anything real — they don't (all fixtures are
       synthetic repos). No action needed, listed so it is not re-checked. **S**
 
@@ -63,9 +64,10 @@ just because its model is listed here.
       `stoic-codex providers models openrouter --free` and `stoic-codex providers models groq`.
       Do not run a paid completion. Groq's list may not expose quota eligibility. **S**
 - [ ] **Re-verify the Ollama preset** (`qwen2.5-coder`) against a local daemon, or delete it. **S**
-- [ ] **Streaming usage for providers that send it late**: OpenAI needs
-      `stream_options.include_usage`; confirm the last frame is not dropped when the socket
-      closes immediately after it. **S**
+- [x] **Streaming usage for providers that send it late**: OpenAI needs
+      `stream_options.include_usage`; `SseDecoder::finish()` now dispatches the final buffered
+      frame at EOF in `run`, `providers test`, and `RemoteModel`. Parser and loopback CLI tests verify
+      usage survives a final frame without a blank-line terminator or `[DONE]` event. **S**
 - [ ] **Anthropic prompt caching + cache counters** in `Usage`, if support for this paid provider
       is later prioritized; cassette-only work, no live key required. **M / optional**
 - [ ] **A second retry dimension**: 429 handling currently retries the *same* model; a rate limit
@@ -76,21 +78,21 @@ just because its model is listed here.
 
 ## 2. CLI (S–M each)
 
-- [ ] **Conversation state / `--continue`.** Implementation is now written in
-      `cli/src/transcript.rs` and wired into `run`: owner-only local JSON transcripts, canonical
-      user/assistant history, automatic session IDs, `--continue` / `--resume <id>` / `--no-session`,
-      and oldest-complete-turn eviction from the *request copy* using the calibrated token budget.
-      Unit and loopback e2e tests are added, but this remains **unverified**: only the isolated TUI
-      crate has been compiled and tested in the latest round; this CLI/session path still needs its
-      own Rust test run before it can be marked done. **L**
+- [x] **Conversation state / `--continue`.** `cli/src/transcript.rs` and `run` provide owner-only
+      local JSON transcripts, canonical user/assistant history, automatic session IDs,
+      `--continue` / `--resume <id>` / `--no-session`, and oldest-complete-turn eviction from the
+      *request copy* using the calibrated token budget. CLI unit and loopback tests pass in the
+      2026-10-26 seven-crate validation run. **L**
 - [ ] **`stoic-codex stream` / a transcript renderer** — markdown, tool calls as they happen, diffs
       inline, rather than one line of progress per tool. **M**
-- [ ] **Budget guard before sending**: wired into transcript context fitting using provider/model
+- [x] **Budget guard before sending**: transcript context fitting uses provider/model
       `max_context` and `max_output` capabilities; the current task is never trimmed and an
-      over-budget request fails before provider I/O. Shares the unverified compile/test status
-      above. **S**
-- [ ] **`--max-attempts` flag** mirroring `providers.max_attempts`, for scripts that would rather
-      fail fast than wait through backoff. **S**
+      over-budget request fails before provider I/O. Covered by CLI unit and loopback tests in the
+      2026-10-26 validation run. **S**
+- [x] **`--max-attempts` override** mirroring validated `providers.max_attempts` (1–10), for
+      scripts that would rather fail fast than wait through backoff. It reaches `run`, agent,
+      mission planning, and provider model-list/test calls; config validation, unit tests, and
+      loopback retry tests for every command family pass. Help and `cli/README.md` updated. **S**
 - [ ] **`stoic-codex doctor`** — one command that checks config validity, key presence (never the
       value), daemon reachability, and TLS trust, and exits non-zero on a broken setup. **M**
 - [ ] **Exit codes audit** — the documented contract is 0/1/2 (ok/failed/usage). Add a test per
@@ -197,7 +199,9 @@ just because its model is listed here.
 
 ## 8. Release gate (do not tag before all of these)
 
-- [ ] All seven crates: `cargo build --all-targets` 0 warnings, `cargo test` green.
+- [x] All seven local crates: `cargo build --all-targets` passed with no warnings; `cargo test`
+      passed 561 tests, 0 failed (4 live/network tests skipped by default). The separate upstream
+      integration patch was not part of this local-crate run.
 - [ ] `cargo test -- --ignored` green **with a key present** for Gemini; skipped-with-message
       (not failed) without one.
 - [ ] One live mission: 3 operators, real repo, real worktrees, one commit, using a provider the
@@ -221,10 +225,12 @@ identifiers and include the pre-existing transcript/context-budget work in the w
 
 - [x] Static review of the source rebrand, `.zenithal` config migration, and `ZENITHAL_*`
       compatibility aliases; historical TypeDB database ID preserved.
-- [ ] Compile and test the Rust changes. **Partially verified**: the isolated TUI crate, including
-      the cosmetic pass, compiles and passes 69 tests with stable Rust 1.99.1. The broader
-      CLI/session, provider/memory, and upstream-fork workspace changes were not covered by this
-      run; rerun their build/tests before release.
+- [x] Compile and test the seven local crates with stable Rust 1.99.1: `cargo build --all-targets`
+      passed for each; `cargo test` passed 561 tests, 0 failed, with 4 live/network tests skipped
+      by default. Targeted rustfmt checks passed on this follow-up's Rust files. The CLI package's
+      `cargo fmt --check` still flags pre-existing drift in `paths.rs`, `transcript.rs`, and
+      `tests/config_migration.rs`; these were not reformatted. **Unverified:** the separate
+      upstream-fork integration patch was not compiled in this run.
 - [x] Transferred the workspace, scanned the staged diff and secrets, and pushed implementation
       commit `5a7bb0d17e31c17f8b6636675876cc990c10af26` plus checklist follow-up
       `a7a58378f9ce7a8f89419acd6ff9a13c0358d7f3` to the selected feature branch only. No `main`
@@ -240,6 +246,12 @@ identifiers and include the pre-existing transcript/context-budget work in the w
       compact `? help` footer, and 40-column unified diff; 69 TUI tests pass and all previews were
       regenerated and inspected. Pushed only to the feature branch; app-shell `?`/Escape dispatch
       remains open.
+- [x] **Non-TUI follow-up:** corrected stale identity guards; added the validated 1–10 retry-count
+      override across run, agent, mission, and provider requests; flushes EOF-terminated SSE usage;
+      updated docs and regression tests. All seven local crates pass (561 tests); implementation
+      commit `a3e2b7f375b8fb185708ac44ac9e535709f885e0` is pushed only to
+      `agent/zenithal-workspace-sync-2026-10-26`. `main` remains unchanged at
+      `970111f6cb62cc02fe36a82ea7d71b37a2889c97`.
 - [ ] Finish credential cleanup: PAT #1's local copy was revoked (HTTP 202) and removed; PAT #2
       was unavailable locally and still needs manual revocation. The later pasted PAT's revocation
       request returned HTTP 422, so it must also be revoked in GitHub settings; its local copies
@@ -249,9 +261,8 @@ identifiers and include the pre-existing transcript/context-budget work in the w
 
 ## A. Verified in the preceding validation round — with the evidence, so it does not get re-litigated
 
-The broad suite counts below predate the new local transcript implementation and tests, and remain
-historical for the rest of the workspace. The isolated TUI crate has since passed 69 tests
-(2026-10-26); that does not validate the transcript/session changes or the full workspace.
+The 2026-10-26 verification run covered the seven local crates. It excludes ignored live/network
+tests by default and does not compile the separate upstream-fork patch.
 
 | Item | Evidence |
 |---|---|
@@ -263,7 +274,11 @@ historical for the rest of the workspace. The isolated TUI crate has since passe
 | Retries | 12 tests: 429 retried, 400 not, bounded attempts, no retry after a delta, `Retry-After` |
 | Tokenizer | 9 tests against 7 live counts, max error 6.1% |
 | Animation | spinner + feed flash + hot spot + twinkle + rim + dissolving edge; 7 new tests |
-| Suite | **527 passed, 0 failed** (cli 125 · providers 112 · memory 90 · agent 84 · tui 60 · ui-core 39 · brand 17) |
-| Live suite | 4 `--ignored` tests: 2 TLS, 2 Gemini — previously green with a key; no Anthropic/OpenAI live tests |
+| Local suite | **561 passed, 0 failed** (cli 149 · providers 113 · memory 90 · agent 84 · tui 69 · ui-core 39 · brand 17); 4 live/network tests skipped by default |
+| All-target build | `cargo build --all-targets` passed for all seven local crate manifests; no warnings |
+| Retry override | Validated 1–10; CLI loopback tests cover run, agent, mission plan, provider model-list, and provider test after 429 |
+| EOF usage frame | Provider parser test and CLI stream integration pass with final usage event missing its blank-line delimiter and `[DONE]` |
+| Formatting | Targeted rustfmt check passes for changed files; CLI `cargo fmt --check` only flags pre-existing drift in `paths.rs`, `transcript.rs`, and `tests/config_migration.rs` |
+| Live suite | 4 `--ignored` tests: 2 TLS, 2 Gemini — historically green with a key but skipped in this round; no Anthropic/OpenAI live tests |
 | Model catalogues | Gemini live GET returned 46 models; CLI loopback test verifies `--free` filtering sends GET only |
 | Cost display | Terminal labels registry pricing as a rate-card estimate; JSON has `cost_basis`; the figure is not billing data |
